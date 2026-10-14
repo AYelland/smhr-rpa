@@ -453,7 +453,7 @@ class Spectrum1D(object):
             flux_ext = flux_ext or 0
             noise_ext = ivar_ext or 1
             logger.info("Recognized HST product.".format(flux_ext))
-			
+
             # -------------------------------------------------------------
             # E. Holmbeck changed these two lines for HST data
             #flux = image[0].data[flux_ext]
@@ -466,31 +466,31 @@ class Spectrum1D(object):
                 logger.info(
                     "This HST spectrum has no noise spectrum. Using zero-indexed flux "
                     "extension (bands) {}, Poisson noise".format(flux_ext))
-			# -------------------------------------------------------------
+            # -------------------------------------------------------------
 
-		# E. Holmbeck added the "try" statement to test for old du Pont data.
-		# Warning: HACKY!
+        # E. Holmbeck added the "try" statement to test for old du Pont data.
+        # Warning: HACKY!
         else:
-			try: #Assume OLD carpy
-				# inverse variance array
-				flux_ext = flux_ext or 1
-				noise_ext = ivar_ext or 2
+            try: # Assume OLD carpy
+                # inverse variance array
+                flux_ext = flux_ext or 1
+                noise_ext = ivar_ext or 2
 
-				logger.info(
-					"Trying for CarPy product. Using zero-indexed flux/noise "
-					"extensions (bands) {}/{}".format(flux_ext, noise_ext))
+                logger.info(
+                    "Trying for CarPy product. Using zero-indexed flux/noise "
+                    "extensions (bands) {}/{}".format(flux_ext, noise_ext))
 
-				flux = image[0].data[flux_ext]
-				ivar = image[0].data[noise_ext]**(-2)
-			
-			except:
-				ivar = np.full_like(flux, np.nan)
-				logger.info("could not identify flux and ivar extensions "
-							"(using nan for ivar)")
-				# It turns out this can mess you up badly so it's better to
-				# just throw the error.
-				if not override_bad:
-					raise NotImplementedError
+                flux = image[0].data[flux_ext]
+                ivar = image[0].data[noise_ext]**(-2)
+
+            except:
+                ivar = np.full_like(flux, np.nan)
+                logger.info("could not identify flux and ivar extensions "
+                            "(using nan for ivar)")
+                # It turns out this can mess you up badly so it's better to
+                # just throw the error.
+                if not override_bad:
+                    raise NotImplementedError
 
         dispersion = np.atleast_2d(dispersion)
         flux = np.atleast_2d(flux)
@@ -1826,4 +1826,3 @@ def coadd(spectra, new_dispersion=None, full_output=False):
     else:
         return newspec
     
-

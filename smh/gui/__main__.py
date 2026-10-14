@@ -13,8 +13,8 @@ from PySide6 import QtCore, QtGui, QtWidgets
 import yaml
 import os
 
-# Fixing pyside2 bug: https://www.loekvandenouweland.com/content/pyside2-big-sur-does-not-show-window.html
-os.environ['QT_MAC_WANTS_LAYER'] = '1'
+# # Fixing pyside2 bug: https://www.loekvandenouweland.com/content/pyside2-big-sur-does-not-show-window.html
+# os.environ['QT_MAC_WANTS_LAYER'] = '1'
 
 # Hacky path solution to override the original path to smhr
 here = os.path.abspath(os.path.dirname(__file__))
@@ -104,9 +104,9 @@ if __name__ == '__main__':
     app.window.raise_()
 
     # DEBUG
-    testpath = os.path.join(os.path.expanduser("~"), "Downloads", "testing.smh")
-    logger.debug("Loading {}".format(testpath))
-    app.window.open_session(path=testpath)
+    # testpath = os.path.join(os.path.expanduser("~"), "Downloads", "testing.smh")
+    # logger.debug("Loading {}".format(testpath))
+    # app.window.open_session(path=testpath)
     
     # DEBUG
     #testpath = os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/spectra/hd122563.fits"
