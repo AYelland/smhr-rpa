@@ -10,19 +10,20 @@ from __future__ import (division, print_function, absolute_import,
 import logging
 import numpy as np
 import yaml
-from pkg_resources import resource_stream
+from importlib.resources import files
 
 from . import utils
 
 logger = logging.getLogger(__name__)
 
 # Load the MOOG defaults.
-with resource_stream(__name__, "defaults.yaml") as fp:
-    try:
-        _moog_defaults = yaml.load(fp, yaml.FullLoader)
-    except AttributeError:
-        _moog_defaults = yaml.load(fp)
-
+# with resource_stream(__name__, "defaults.yaml") as fp:
+#     try:
+#         _moog_defaults = yaml.load(fp, yaml.FullLoader)
+#     except AttributeError:
+#         _moog_defaults = yaml.load(fp)
+_moog_defaults = yaml.safe_load(
+    (files(__package__) / "defaults.yaml").read_text())
 
 def synthesize(photosphere, transitions, abundances=None, isotopes=None,
     verbose=False, twd=None, **kwargs):
@@ -59,8 +60,7 @@ def synthesize(photosphere, transitions, abundances=None, isotopes=None,
         kwargs["strong"] = 1
     
     # Load the synth driver template.
-    with resource_stream(__name__, "synth.in") as fp:
-        template = fp.read().decode("utf-8")
+    template = (files(__package__) / "synth.in").read_text(encoding="utf-8")
 
     # Not these are SMH defaults, not MOOG defaults.
     kwds = _moog_defaults.copy()

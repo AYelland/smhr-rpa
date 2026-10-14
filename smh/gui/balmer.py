@@ -13,7 +13,7 @@ import sys
 import time
 from glob import glob
 from matplotlib.ticker import MaxNLocator
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
+from PySide6 import QtCore, QtGui, QtWidgets
 from scipy import interpolate
 
 from smh.balmer import BalmerLineModel
@@ -31,7 +31,7 @@ if sys.platform == "darwin":
         (".Helvetica Neue DeskInterface", "Helvetica Neue")
     ]
     for substitute in substitutes:
-        QtGui2.QFont.insertSubstitution(*substitute)
+        QtGui.QFont.insertSubstitution(*substitute)
 
 
 def unique_indices(a):
@@ -93,7 +93,7 @@ class Worker(QtCore.QThread):
         return None
 
 
-class BalmerLineFittingDialog(QtGui.QDialog):
+class BalmerLineFittingDialog(QtWidgets.QDialog):
 
     __balmer_line_names = ("H-α", "H-β", "H-γ", "H-δ")
     __balmer_line_wavelengths = (6563, 4861, 4341, 4102)
@@ -181,18 +181,17 @@ class BalmerLineFittingDialog(QtGui.QDialog):
 
         # Start creating GUI.
         self.setGeometry(800, 600, 800, 600)
-        desktop = QtGui.QApplication.desktop()
-        self.move(desktop.screen().rect().center() \
-            - self.rect().center())
+        screen = self.screen() if self.screen() else QtWidgets.QApplication.primaryScreen()
+        self.move(screen.geometry().center() - self.rect().center())
         self.setWindowTitle("Balmer-line fitting")
 
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.layout)
 
         # Add panes.
@@ -241,42 +240,42 @@ class BalmerLineFittingDialog(QtGui.QDialog):
     def _add_pane_1(self):
         """ Add the first pane of widgets to the dialog window. """
 
-        self.p1 = QtGui.QWidget()
+        self.p1 = QtWidgets.QWidget()
         self.layout.addWidget(self.p1)
 
         # Panel 1
-        p1_vbox = QtGui.QVBoxLayout()
+        p1_vbox = QtWidgets.QVBoxLayout()
         self.p1.setLayout(p1_vbox)
 
 
-        hbox = QtGui.QHBoxLayout()
-        self.combo_balmer_line_selected = QtGui.QComboBox(self)
+        hbox = QtWidgets.QHBoxLayout()
+        self.combo_balmer_line_selected = QtWidgets.QComboBox(self)
 
         hbox.addWidget(self.combo_balmer_line_selected)
-        hbox.addItem(QtGui.QSpacerItem(
-            20, 20, QtGui.QSizePolicy.Maximum, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(
+            20, 20, QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Minimum))
 
-        self.combo_spectrum_selected = QtGui.QComboBox(self)
+        self.combo_spectrum_selected = QtWidgets.QComboBox(self)
         hbox.addWidget(self.combo_spectrum_selected)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
         p1_vbox.addLayout(hbox)
 
-        line = QtGui.QFrame(self)
-        line.setFrameShape(QtGui.QFrame.HLine)
-        line.setFrameShadow(QtGui.QFrame.Sunken)
+        line = QtWidgets.QFrame(self)
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
         p1_vbox.addWidget(line)
 
         # Model options table and group.
-        hbox = QtGui.QHBoxLayout()
-        gp = QtGui.QGroupBox(self)
+        hbox = QtWidgets.QHBoxLayout()
+        gp = QtWidgets.QGroupBox(self)
         gp.setTitle("Model options")
         gp.setMinimumSize(QtCore.QSize(0, 0))
-        vbox = QtGui.QVBoxLayout(gp)
+        vbox = QtWidgets.QVBoxLayout(gp)
 
-        self.p1_model_options = QtGui.QTableView(gp)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
+        self.p1_model_options = QtWidgets.QTableView(gp)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.p1_model_options.sizePolicy().hasHeightForWidth())
@@ -284,14 +283,14 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         self.p1_model_options.setMinimumSize(QtCore.QSize(300, 16777215))
         self.p1_model_options.setMaximumSize(QtCore.QSize(300, 16777215))
         self.p1_model_options.setEditTriggers(
-            QtGui.QAbstractItemView.CurrentChanged)
+            QtWidgets.QAbstractItemView.CurrentChanged)
         self.p1_model_options.setModel(BalmerLineOptionsTableModel(self))
         self.p1_model_options.horizontalHeader().setSectionResizeMode(
-            QtGui.QHeaderView.Stretch)
+            QtWidgets.QHeaderView.Stretch)
 
         # First column should be fixed for the checkbox.
         self.p1_model_options.horizontalHeader().setSectionResizeMode(
-            0, QtGui.QHeaderView.Fixed)
+            0, QtWidgets.QHeaderView.Fixed)
         self.p1_model_options.horizontalHeader().resizeSection(0, 30) # MAGIC
 
 
@@ -299,8 +298,8 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         hbox.addWidget(gp)
 
         self.p1_figure = mpl.MPLWidget(None, tight_layout=True, matchbg=self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.p1_figure.sizePolicy().hasHeightForWidth())
@@ -310,24 +309,24 @@ class BalmerLineFittingDialog(QtGui.QDialog):
 
         p1_vbox.addLayout(hbox)
 
-        line = QtGui.QFrame(self)
-        line.setFrameShape(QtGui.QFrame.HLine)
-        line.setFrameShadow(QtGui.QFrame.Sunken)
+        line = QtWidgets.QFrame(self)
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
         p1_vbox.addWidget(line)
 
 
-        hbox = QtGui.QHBoxLayout()
-        self.p1_save_settings_as_default = QtGui.QPushButton(self)
+        hbox = QtWidgets.QHBoxLayout()
+        self.p1_save_settings_as_default = QtWidgets.QPushButton(self)
         self.p1_save_settings_as_default.setText("Save settings as default")
         self.p1_save_settings_as_default.setFocusPolicy(QtCore.Qt.NoFocus)
         if self.session is None:
             self.p1_save_settings_as_default.setEnabled(False)
         hbox.addWidget(self.p1_save_settings_as_default)
 
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
 
-        self.p1_sample_posterior = QtGui.QPushButton(self)
+        self.p1_sample_posterior = QtWidgets.QPushButton(self)
         self.p1_sample_posterior.setText("Sample posterior")
         self.p1_sample_posterior.setFocusPolicy(QtCore.Qt.NoFocus)
         hbox.addWidget(self.p1_sample_posterior)
@@ -403,29 +402,29 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         Add pane 3, an intermediate pane while we are sampling the posterior.
         """
 
-        self.p3 = QtGui.QWidget()
+        self.p3 = QtWidgets.QWidget()
         self.layout.addWidget(self.p3)
 
         # Pane 3
-        p3_layout = QtGui.QGridLayout()
+        p3_layout = QtWidgets.QGridLayout()
         self.p3.setLayout(p3_layout)
 
-        p3_layout.addItem(QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, 
-            QtGui.QSizePolicy.Expanding), 0, 1, 1, 1)
-        self.p3_progressbar = QtGui.QProgressBar(self)
+        p3_layout.addItem(QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, 
+            QtWidgets.QSizePolicy.Expanding), 0, 1, 1, 1)
+        self.p3_progressbar = QtWidgets.QProgressBar(self)
         self.p3_progressbar.setFocusPolicy(QtCore.Qt.NoFocus)
         p3_layout.addWidget(self.p3_progressbar, 2, 1, 1, 1)
 
-        p3_layout.addItem(QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding,
-            QtGui.QSizePolicy.Minimum), 2, 2, 1, 1)
-        p3_layout.addItem(QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding,
-            QtGui.QSizePolicy.Minimum), 2, 0, 1, 1)
-        self.p3_label = QtGui.QLabel(self)
+        p3_layout.addItem(QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Minimum), 2, 2, 1, 1)
+        p3_layout.addItem(QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Minimum), 2, 0, 1, 1)
+        self.p3_label = QtWidgets.QLabel(self)
         self.p3_label.setText("Sampling posterior")
         self.p3_label.setAlignment(QtCore.Qt.AlignCenter)
         p3_layout.addWidget(self.p3_label, 1, 1, 1, 1)
-        p3_layout.addItem(QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, 
-            QtGui.QSizePolicy.Expanding), 3, 1, 1, 1)
+        p3_layout.addItem(QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, 
+            QtWidgets.QSizePolicy.Expanding), 3, 1, 1, 1)
 
 
         return None
@@ -436,21 +435,21 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         Add pane 4 to show inference results from Balmer line models.
         """
 
-        self.p4 = QtGui.QWidget()
+        self.p4 = QtWidgets.QWidget()
         self.layout.addWidget(self.p4)
 
-        p4_layout = QtGui.QVBoxLayout()
+        p4_layout = QtWidgets.QVBoxLayout()
         self.p4.setLayout(p4_layout)
 
         # Two figures in two groups.
-        self.p4_tabs = QtGui.QTabWidget(self)
-        self.p4_tabs.setTabPosition(QtGui.QTabWidget.North)
+        self.p4_tabs = QtWidgets.QTabWidget(self)
+        self.p4_tabs.setTabPosition(QtWidgets.QTabWidget.North)
         self.p4_tabs.setUsesScrollButtons(False)
 
 
         self.p4_figure_posterior = mpl.MPLWidget(None, tight_layout=True, matchbg=self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.p4_figure_posterior.sizePolicy().hasHeightForWidth())
@@ -460,8 +459,8 @@ class BalmerLineFittingDialog(QtGui.QDialog):
 
 
         self.p4_figure_projection = mpl.MPLWidget(None, tight_layout=True, matchbg=self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.p4_figure_projection.sizePolicy().hasHeightForWidth())
@@ -474,19 +473,19 @@ class BalmerLineFittingDialog(QtGui.QDialog):
 
         # Hbox for lower buttons.
 
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
 
         # Save to session
-        self.p4_btn_save_to_session = QtGui.QPushButton(self)
+        self.p4_btn_save_to_session = QtWidgets.QPushButton(self)
         self.p4_btn_save_to_session.setFocusPolicy(QtCore.Qt.NoFocus)
         self.p4_btn_save_to_session.setText("Save result to session")
         hbox.addWidget(self.p4_btn_save_to_session)
 
-        hbox.addItem(QtGui.QSpacerItem(
-            20, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(
+            20, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
 
         # Close.
-        self.p4_btn_close = QtGui.QPushButton(self)
+        self.p4_btn_close = QtWidgets.QPushButton(self)
         self.p4_btn_close.setText("Close")
         hbox.addWidget(self.p4_btn_close)
 
@@ -535,7 +534,7 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         })
 
         # Inform.
-        QtGui.QMessageBox.information(self, "Settings saved",
+        QtWidgets.QMessageBox.information(self, "Settings saved",
             "Settings saved as default for future sessions.")
 
         return True
@@ -551,7 +550,7 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         while True:
 
             # Ask for a name for this result.
-            result_name, ok = QtGui.QInputDialog.getText(self, "Result name",
+            result_name, ok = QtWidgets.QInputDialog.getText(self, "Result name",
                 "Specify a name for this result:", text=default_text)
 
             if not ok \
@@ -560,13 +559,13 @@ class BalmerLineFittingDialog(QtGui.QDialog):
 
             # This result_name already exists in the session.
             # Ask the user to overwrite.
-            flags = QtGui.QMessageBox.StandardButton.Yes
-            flags |= QtGui.QMessageBox.StandardButton.No
-            response = QtGui.QMessageBox.question(self, "Overwrite",
+            flags = QtWidgets.QMessageBox.StandardButton.Yes
+            flags |= QtWidgets.QMessageBox.StandardButton.No
+            response = QtWidgets.QMessageBox.question(self, "Overwrite",
                 "A result named '{}' already exists. Overwrite?".format(
                     result_name), flags)
 
-            if response == QtGui.QMessageBox.Yes:
+            if response == QtWidgets.QMessageBox.Yes:
                 break
 
             else:
@@ -581,7 +580,7 @@ class BalmerLineFittingDialog(QtGui.QDialog):
         self.session.metadata["balmer_line_fits"][result_name] \
             = [_BALMER_LINE_MODEL]
 
-        QtGui.QMessageBox.information(self, "Success",
+        QtWidgets.QMessageBox.information(self, "Success",
             "Results saved to session.")
 
         return True
@@ -958,7 +957,7 @@ class BalmerLineOptionsTableModel(QtCore.QAbstractTableModel):
                 self.beginResetModel()
                 if value:
 
-                    N, is_ok = QtGui.QInputDialog.getItem(None, 
+                    N, is_ok = QtWidgets.QInputDialog.getItem(None, 
                         "Continuum order", "Specify continuum order:", 
                         ["{:.0f}".format(i) \
                             for i in range(1 + self._max_continuum_order)])
@@ -1113,7 +1112,7 @@ if __name__ == "__main__":
 
     # This is just for development testing.
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
 
     except RuntimeError:
         None
@@ -1140,7 +1139,7 @@ if __name__ == "__main__":
         observed_spectra_labels=["Order {}".format(i) for i in range(1, len(spectra))] + ["Normalized rest-frame spectrum"],
         session=session)
 
-    window.exec_()
+    window.exec()
 
     
 

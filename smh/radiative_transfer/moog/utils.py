@@ -16,7 +16,6 @@ import subprocess
 from smh.photospheres.abundances import asplund_2009 as solar_composition
 from smh.utils import elems_isotopes_ion_to_species, element_to_atomic_number
 from smh.utils import mkdtemp
-from six import iteritems, string_types
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +55,7 @@ def twd_path(twd=None,**kwargs):
         #kwds.setdefault("prefix", "smh-")
         twd = mkdtemp(**kwds)
     if len(twd) > 35:
-        logger.warn(
+        logger.warning(
             "Temporary working directory should be as short as possible to "\
             "prevent MOOG(SILENT) from falling over. Current length ({0}): "\
             "{1}".format(len(twd), twd))
@@ -153,7 +152,7 @@ def _format_abundances(elemental_abundances=None, subtract_solar=False,
     
     # Make sure that the abundances are specified as (atomic_number: abundance)
     for key in list(elemental_abundances.keys()):
-        if isinstance(key, string_types):
+        if isinstance(key, str):
             # It's an element. Convert to atomic number.
             atomic_number = element_to_atomic_number(key)
             if atomic_number in elemental_abundances.keys():
@@ -230,7 +229,7 @@ def _format_isotopes(isotopes=None, ionisation_states=(0, 1), num_synth=1):
     #fmt = "  {0:} {1:.3f} {1:.3f} {1:.3f}"
     fmt = "  "+" ".join(["{0:}"]+["{1:.3f}" for x in range(num_synth)])
     for elem in isotopes:
-        for A,frac in iteritems(isotopes[elem]):
+        for A,frac in isotopes[elem].items():
             if frac==0:
                 invfrac = 99999.9
             else:

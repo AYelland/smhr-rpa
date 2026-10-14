@@ -9,8 +9,8 @@ from __future__ import (division, print_function, absolute_import,
 import numpy as np
 import os
 import sys
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
-from six import string_types
+from PySide6 import QtCore, QtGui, QtWidgets
+import yaml
 
 import mpl
 from matplotlib import (gridspec, pyplot as plt)
@@ -27,7 +27,7 @@ __all__ = ["RVTab"]
 
 c = 299792458e-3 # km/s
 
-class RVTab(QtGui.QWidget):
+class RVTab(QtWidgets.QWidget):
 
     def __init__(self, parent):
         """
@@ -42,25 +42,25 @@ class RVTab(QtGui.QWidget):
         self.parent = parent
 
         # Create the overall RV tab.
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
         # Create a top-level horizontal layout to contain a matplotlib figure and
         # a vertical layout of settings..
-        rv_tab_layout = QtGui.QHBoxLayout(self)
+        rv_tab_layout = QtWidgets.QHBoxLayout(self)
         rv_tab_layout.setContentsMargins(20, 20, 20, 0)
 
         # This vertical layout will be for input settings.
-        rv_settings_vbox = QtGui.QVBoxLayout()
-        rv_settings_vbox.setSizeConstraint(QtGui.QLayout.SetMinimumSize)
+        rv_settings_vbox = QtWidgets.QVBoxLayout()
+        rv_settings_vbox.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
 
         # A two-tab setting for 'template' and 'normalization' settings in the
         # radial velocity determination.
-        rv_settings_tabs = QtGui.QTabWidget(self)
+        rv_settings_tabs = QtWidgets.QTabWidget(self)
 
-        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Fixed)
+        sp = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(rv_settings_tabs.sizePolicy().hasHeightForWidth())
@@ -74,34 +74,34 @@ class RVTab(QtGui.QWidget):
 
 
         # A tab containing template settings.
-        template_tab = QtGui.QWidget()
+        template_tab = QtWidgets.QWidget()
         template_tab.setObjectName("tv_template_tab")
 
         # TODO: Should template_tab and template_tab_widget actually be one entity?
-        template_tab_widget = QtGui.QWidget(template_tab)
+        template_tab_widget = QtWidgets.QWidget(template_tab)
         template_tab_widget.setGeometry(QtCore.QRect(0, 0, 300, 210))
 
-        template_tab_layout = QtGui.QVBoxLayout(template_tab_widget)
-        template_tab_layout.setSizeConstraint(QtGui.QLayout.SetDefaultConstraint)
+        template_tab_layout = QtWidgets.QVBoxLayout(template_tab_widget)
+        template_tab_layout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
         template_tab_layout.setContentsMargins(10, 10, 10, 10)
 
         # Add a label at the top of the template settings tab.
-        label = QtGui.QLabel(template_tab_widget)
+        label = QtWidgets.QLabel(template_tab_widget)
         label.setMaximumSize(QtCore.QSize(240, 16777215))
         label.setText("Template spectrum filename:")
         template_tab_layout.addWidget(label)
 
         # Inner horizontal layout for the template path and select.
-        template_path_layout = QtGui.QHBoxLayout()
+        template_path_layout = QtWidgets.QHBoxLayout()
 
         # Template path line edit (read-only).
-        self.template_path = QtGui.QLineEdit(template_tab_widget)
+        self.template_path = QtWidgets.QLineEdit(template_tab_widget)
         self.template_path.setObjectName("rv_template_path")
         self.template_path.setReadOnly(True)
         template_path_layout.addWidget(self.template_path)
 
         # Template path select button.
-        rv_select_template_btn = QtGui.QPushButton(template_tab_widget)
+        rv_select_template_btn = QtWidgets.QPushButton(template_tab_widget)
         rv_select_template_btn.setObjectName("rv_select_template_btn")
         rv_select_template_btn.setText("...")
         template_path_layout.addWidget(rv_select_template_btn)
@@ -110,20 +110,20 @@ class RVTab(QtGui.QWidget):
         template_tab_layout.addLayout(template_path_layout)
 
         # Add a label for the wavelength regions
-        label = QtGui.QLabel(template_tab_widget)
+        label = QtWidgets.QLabel(template_tab_widget)
         label.setMaximumSize(QtCore.QSize(240, 16777215))
         label.setText("Wavelength region:")
         template_tab_layout.addWidget(label)
 
         # Wavelength region for CCF.
-        wl_region_layout = QtGui.QHBoxLayout()
-        self.wl_region = QtGui.QComboBox(template_tab_widget)
-        self.wl_region.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
+        wl_region_layout = QtWidgets.QHBoxLayout()
+        self.wl_region = QtWidgets.QComboBox(template_tab_widget)
+        self.wl_region.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
         self.wl_region.setObjectName("rv_wl_region")
         wl_region_layout.addWidget(self.wl_region)
 
         # Edit button for the wavelength regions.
-        rv_wl_region_edit = QtGui.QPushButton(template_tab_widget)
+        rv_wl_region_edit = QtWidgets.QPushButton(template_tab_widget)
         rv_wl_region_edit.setMaximumSize(QtCore.QSize(80, 16777215))
         rv_wl_region_edit.setObjectName("rv_wl_region_edit")
         wl_region_layout.addWidget(rv_wl_region_edit)
@@ -131,17 +131,17 @@ class RVTab(QtGui.QWidget):
         rv_wl_region_edit.setText("Edit list")
 
         # Add a horizontal line.
-        hr = QtGui.QFrame(template_tab_widget)
-        hr.setFrameShape(QtGui.QFrame.HLine)
-        hr.setFrameShadow(QtGui.QFrame.Sunken)
+        hr = QtWidgets.QFrame(template_tab_widget)
+        hr.setFrameShape(QtWidgets.QFrame.HLine)
+        hr.setFrameShadow(QtWidgets.QFrame.Sunken)
         template_tab_layout.addWidget(hr)
 
         # Add a flexible spacer.
-        template_tab_layout.addItem(QtGui.QSpacerItem(
-            20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        template_tab_layout.addItem(QtWidgets.QSpacerItem(
+            20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
 
         # Add a cross-correlate button.
-        rv_cross_correlate_btn = QtGui.QPushButton(template_tab_widget)
+        rv_cross_correlate_btn = QtWidgets.QPushButton(template_tab_widget)
         rv_cross_correlate_btn.setObjectName("rv_cross_correlate_btn")
         rv_cross_correlate_btn.setText("Cross-correlate")
         template_tab_layout.addWidget(rv_cross_correlate_btn)
@@ -150,30 +150,30 @@ class RVTab(QtGui.QWidget):
         rv_settings_tabs.addTab(template_tab, "Template")
 
         # Start the normalization tab.
-        norm_tab = QtGui.QWidget()
+        norm_tab = QtWidgets.QWidget()
         norm_tab.setObjectName("rv_normalization_tab")
 
-        norm_tab_widget = QtGui.QWidget(norm_tab)
+        norm_tab_widget = QtWidgets.QWidget(norm_tab)
         norm_tab_widget.setGeometry(QtCore.QRect(0, 0, 300, 210))
 
-        norm_tab_layout = QtGui.QVBoxLayout(norm_tab_widget)
+        norm_tab_layout = QtWidgets.QVBoxLayout(norm_tab_widget)
         norm_tab_layout.setContentsMargins(10, 10, 10, 10)
 
         # Start the grid layout for the normalization tab.
-        norm_tab_grid_layout = QtGui.QGridLayout()
+        norm_tab_grid_layout = QtWidgets.QGridLayout()
 
 
         # Normalization function.
-        label = QtGui.QLabel(norm_tab_widget)
+        label = QtWidgets.QLabel(norm_tab_widget)
         label.setText("Function")
         norm_tab_grid_layout.addWidget(label, 0, 0, 1, 1)
         
         # Put the normalization function combo box in a horizontal layout with a
         # spacer.
-        hbox = QtGui.QHBoxLayout()
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_function = QtGui.QComboBox(norm_tab_widget)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_function = QtWidgets.QComboBox(norm_tab_widget)
         self.norm_function.setObjectName("rv_norm_function")
         hbox.addWidget(self.norm_function)
         norm_tab_grid_layout.addLayout(hbox, 0, 1, 1, 1)
@@ -184,15 +184,15 @@ class RVTab(QtGui.QWidget):
 
 
         # Normalization function order.
-        label = QtGui.QLabel(norm_tab_widget)
+        label = QtWidgets.QLabel(norm_tab_widget)
         label.setText("Order")
         norm_tab_grid_layout.addWidget(label, 1, 0, 1, 1)
         
         # Put the normalization order combo box in a horizontal layout with a spacer
-        hbox = QtGui.QHBoxLayout()
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_order = QtGui.QComboBox(norm_tab_widget)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_order = QtWidgets.QComboBox(norm_tab_widget)
         self.norm_order.setMaximumSize(QtCore.QSize(50, 16777215))
         self.norm_order.setObjectName("rv_norm_order")
         hbox.addWidget(self.norm_order)
@@ -204,15 +204,15 @@ class RVTab(QtGui.QWidget):
 
 
         # Maximum number of iterations.
-        label = QtGui.QLabel(norm_tab_widget)
+        label = QtWidgets.QLabel(norm_tab_widget)
         label.setText("Maximum iterations")
         norm_tab_grid_layout.addWidget(label, 2, 0, 1, 1)
 
         # Put the maxium number of iterations in a horizontal layout with a spacer.
-        hbox = QtGui.QHBoxLayout()
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_max_iter = QtGui.QComboBox(norm_tab_widget)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_max_iter = QtWidgets.QComboBox(norm_tab_widget)
         self.norm_max_iter.setMaximumSize(QtCore.QSize(50, 16777215))
         self.norm_max_iter.setObjectName("rv_norm_max_iter")
         hbox.addWidget(self.norm_max_iter)
@@ -224,85 +224,85 @@ class RVTab(QtGui.QWidget):
 
 
         # Low sigma clipping.
-        label = QtGui.QLabel(norm_tab_widget)
+        label = QtWidgets.QLabel(norm_tab_widget)
         label.setText("Low sigma clip")
         norm_tab_grid_layout.addWidget(label, 3, 0, 1, 1)
 
         # Put the low sigma line edit box in a horizontal layout with a spacer.
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_low_sigma = QtGui.QLineEdit(norm_tab_widget)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_low_sigma = QtWidgets.QLineEdit(norm_tab_widget)
         self.norm_low_sigma.setMaximumSize(QtCore.QSize(40, 16777215))
         self.norm_low_sigma.setAlignment(QtCore.Qt.AlignCenter)
         self.norm_low_sigma.setObjectName("rv_norm_low_sigma")
         self.norm_low_sigma.setValidator(
-            QtGui2.QDoubleValidator(0, 1000, 2, self.norm_low_sigma))
+            QtGui.QDoubleValidator(0, 1000, 2, self.norm_low_sigma))
         hbox.addWidget(self.norm_low_sigma)
         norm_tab_grid_layout.addLayout(hbox, 3, 1, 1, 1)
 
 
         # High sigma clipping.
-        label = QtGui.QLabel(norm_tab_widget)
+        label = QtWidgets.QLabel(norm_tab_widget)
         label.setText("High sigma clip")
         norm_tab_grid_layout.addWidget(label, 4, 0, 1, 1)
 
         # Put the high sigma line edit box in a horizontal layout with a spacer.
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_high_sigma = QtGui.QLineEdit(norm_tab_widget)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_high_sigma = QtWidgets.QLineEdit(norm_tab_widget)
         self.norm_high_sigma.setMaximumSize(QtCore.QSize(40, 16777215))
         self.norm_high_sigma.setAlignment(QtCore.Qt.AlignCenter)
         self.norm_high_sigma.setObjectName("rv_norm_high_sigma")
         self.norm_high_sigma.setValidator(
-            QtGui2.QDoubleValidator(0, 1000, 2, self.norm_high_sigma))
+            QtGui.QDoubleValidator(0, 1000, 2, self.norm_high_sigma))
         hbox.addWidget(self.norm_high_sigma)
         norm_tab_grid_layout.addLayout(hbox, 4, 1, 1, 1)
         
 
         # Knot spacing.
-        label = QtGui.QLabel(norm_tab_widget)
+        label = QtWidgets.QLabel(norm_tab_widget)
         norm_tab_grid_layout.addWidget(label, 5, 0, 1, 1)
         label.setText(u"Knot spacing (Å)")
 
         # Put the knot spacing lint edit box in a horizontal layout with a spacer
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_knot_spacing = QtGui.QLineEdit(norm_tab_widget)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_knot_spacing = QtWidgets.QLineEdit(norm_tab_widget)
         self.norm_knot_spacing.setMaximumSize(QtCore.QSize(40, 16777215))
         self.norm_knot_spacing.setAlignment(QtCore.Qt.AlignCenter)
         self.norm_knot_spacing.setObjectName("rv_norm_knot_spacing")
         self.norm_knot_spacing.setValidator(
-            QtGui2.QIntValidator(0, 10000, self.norm_knot_spacing))
+            QtGui.QIntValidator(0, 10000, self.norm_knot_spacing))
         hbox.addWidget(self.norm_knot_spacing)
         norm_tab_grid_layout.addLayout(hbox, 5, 1, 1, 1)
 
         # End of the grid in the normalization tab.
         norm_tab_layout.addLayout(norm_tab_grid_layout)
-        norm_tab_layout.addItem(QtGui.QSpacerItem(
-            20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        norm_tab_layout.addItem(QtWidgets.QSpacerItem(
+            20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
 
         rv_settings_tabs.addTab(norm_tab, "Order normalization")
         rv_settings_vbox.addWidget(rv_settings_tabs)
 
 
         # Horizontal layout for the radial velocity measured/corrected.
-        hbox = QtGui.QHBoxLayout()
-        hbox.setSizeConstraint(QtGui.QLayout.SetMaximumSize)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.setSizeConstraint(QtWidgets.QLayout.SetMaximumSize)
         hbox.setContentsMargins(10, 0, 10, -1)
 
-        label = QtGui.QLabel(self)
+        label = QtWidgets.QLabel(self)
         label.setText("Radial velocity:")
         hbox.addWidget(label)
 
         # Radial velocity measured.
-        self.rv_applied = QtGui.QLineEdit(self)
-        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Fixed)
+        self.rv_applied = QtWidgets.QLineEdit(self)
+        sp = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.rv_applied.sizePolicy().hasHeightForWidth())
@@ -310,56 +310,83 @@ class RVTab(QtGui.QWidget):
         self.rv_applied.setMinimumSize(QtCore.QSize(50, 16777215))
         self.rv_applied.setAlignment(QtCore.Qt.AlignCenter)
         self.rv_applied.setValidator(
-            QtGui2.QDoubleValidator(-1e6, 1e6, 2, self.rv_applied))
+            QtGui.QDoubleValidator(-1e6, 1e6, 2, self.rv_applied))
         self.rv_applied.textChanged.connect(self.check_state)
         self.rv_applied.returnPressed.connect(self.correct_radial_velocity)
 
         hbox.addWidget(self.rv_applied)
 
         # Units/uncertainty label.
-        label = QtGui.QLabel(self)
+        label = QtWidgets.QLabel(self)
         label.setObjectName("rv_measured_units_label")
         label.setText("km/s")
         hbox.addWidget(label)
 
         # Correct for radial velocity button.
-        rv_correct_btn = QtGui.QPushButton(self)
+        rv_correct_btn = QtWidgets.QPushButton(self)
         rv_correct_btn.setObjectName("rv_correct_btn")
         rv_correct_btn.setText("Correct")
         hbox.addWidget(rv_correct_btn)
         rv_settings_vbox.addLayout(hbox)
 
         # The cross-correlate and correct button.
-        rv_ccc_btn = QtGui.QPushButton(self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
+        rv_ccc_btn = QtWidgets.QPushButton(self)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Fixed)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(rv_ccc_btn.sizePolicy().hasHeightForWidth())
         rv_ccc_btn.setSizePolicy(sp)
         rv_ccc_btn.setMinimumSize(QtCore.QSize(300, 0))
         rv_ccc_btn.setMaximumSize(QtCore.QSize(300, 16777215))
-        font = QtGui2.QFont()
+        font = QtGui.QFont()
         font.setBold(True)
-        font.setWeight(75)
+        font.setWeight(QtGui.QFont.Weight.Bold)
         rv_ccc_btn.setFont(font)
-        rv_ccc_btn.setCursor(QtGui2.QCursor(QtCore.Qt.PointingHandCursor))
+        rv_ccc_btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         rv_ccc_btn.setDefault(True)
         rv_ccc_btn.setObjectName("rv_ccc_btn")
         rv_ccc_btn.setText("Cross-correlate and correct")
 
         rv_settings_vbox.addWidget(rv_ccc_btn)
 
+        # Display the velocity corrections
+        grid_layout = QtWidgets.QGridLayout()
+        rv_settings_vbox.addLayout(grid_layout)
+        rv_summary_rows = [
+            ("Radial Velocity",                 "rv_measured",  "km/s"),
+            ("Radial velocity uncertainty",     "rv_uncertainty", "km/s"),
+            ("Heliocentric correction",         "heliocentric_correction", "km/s"),
+            ("Barycentric velocity correction", "barycentric_correction", "km/s"),
+        ]
+        self.rv_summary_labels = {}
+
+        for row, (desc, key, units) in enumerate(rv_summary_rows):
+            desc_label = QtWidgets.QLabel(desc, self)
+            grid_layout.addWidget(desc_label, row, 0, 1, 1,
+                                alignment=QtCore.Qt.AlignLeft)
+
+            value_label = QtWidgets.QLabel(self)
+            value_label.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+            self._set_rv_summary_value(value_label, np.nan)  # placeholder on init
+            grid_layout.addWidget(value_label, row, 1, 1, 1,
+                                alignment=QtCore.Qt.AlignRight)
+            self.rv_summary_labels[key] = value_label  # <-- store reference
+
+            units_label = QtWidgets.QLabel(units, self)
+            grid_layout.addWidget(units_label, row, 2, 1, 1,
+                                alignment=QtCore.Qt.AlignLeft)
+
         # Add a spacer after the big button.
-        rv_settings_vbox.addItem(QtGui.QSpacerItem(
-            20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        rv_settings_vbox.addItem(QtWidgets.QSpacerItem(
+            20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
 
         rv_tab_layout.addLayout(rv_settings_vbox)
 
         # Create a matplotlib widget.
         self.rv_plot = mpl.MPLWidget(None, tight_layout=True)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.rv_plot.sizePolicy().hasHeightForWidth())
@@ -441,7 +468,29 @@ class RVTab(QtGui.QWidget):
         return None
 
 
+    def _set_rv_summary_value(self, label, value):
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            label.setText("—")
+        else:
+            label.setText("{0:+.2f}".format(float(value)))
 
+    def _update_rv_summary(self, rv_dict):
+        """
+        Refresh the RV summary grid (and any other RV-dependent widgets)
+        from the given rv metadata dictionary.
+        """
+        self._set_rv_summary_value(
+            self.rv_summary_labels["rv_measured"], rv_dict.get("rv_measured", np.nan))
+        self._set_rv_summary_value(
+            self.rv_summary_labels["rv_uncertainty"], rv_dict.get("rv_uncertainty", np.nan))
+        self._set_rv_summary_value(
+            self.rv_summary_labels["heliocentric_correction"], rv_dict.get("heliocentric_correction", np.nan))
+        self._set_rv_summary_value(
+            self.rv_summary_labels["barycentric_correction"], rv_dict.get("barycentric_correction", np.nan))
+
+        self.rv_applied.setText(
+            "{0:+.1f}".format(float(rv_dict.get("rv_measured", np.nan))))
+    
     def check_state(self, *args, **kwargs):
         """
         Update the background color of a QLineEdit object based on whether the
@@ -451,15 +500,13 @@ class RVTab(QtGui.QWidget):
         sender = self.sender()
         validator = sender.validator()
         state = validator.validate(sender.text(), 0)[0]
-        if state == QtGui2.QValidator.Acceptable:
+        if state == QtGui.QValidator.Acceptable:
             color = 'none' # normal background color
-        elif state == QtGui2.QValidator.Intermediate:
+        elif state == QtGui.QValidator.Intermediate:
             color = '#fff79a' # yellow
         else:
             color = '#f6989d' # red
         sender.setStyleSheet('QLineEdit { background-color: %s }' % color)
-
-
 
     def _populate_widgets(self):
         """
@@ -489,13 +536,13 @@ class RVTab(QtGui.QWidget):
         del self._cache["input"]["wavelength_regions"]
 
         # Sometimes template_spectrum in a specutils.Spectrum1D
-        if isinstance(rv_dict.get("template_spectrum",""), string_types) \
+        if isinstance(rv_dict.get("template_spectrum",""), str) \
         and not os.path.exists(rv_dict.get("template_spectrum", "")):
             rv_dict["template_spectrum"] = ""
 
         # Template filename.
         self.template_path.setReadOnly(False)
-        if isinstance(rv_dict.get("template_spectrum", ""), string_types):
+        if isinstance(rv_dict.get("template_spectrum", ""), str):
             self.template_path.setText(
                 os.path.basename(rv_dict["template_spectrum"]))
             rv_dict["template_spectrum_path"] = rv_dict["template_spectrum"]
@@ -541,8 +588,10 @@ class RVTab(QtGui.QWidget):
             str(rv_dict["normalization"]["knot_spacing"]))
 
         # RV
-        self.rv_applied.setText("{0:+.1f}".format(\
-                float(rv_dict.get("rv_measured",np.nan))))
+        # self.rv_applied.setText("{0:+.1f}".format(\
+        #         float(rv_dict.get("rv_measured",np.nan))))
+
+        self._update_rv_summary(rv_dict)
 
         return None
 
@@ -687,7 +736,7 @@ class RVTab(QtGui.QWidget):
         Select the template spectrum filename from disk.
         """
 
-        path, _ = QtGui.QFileDialog.getOpenFileName(self.parent,
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self.parent,
             caption="Select template spectrum", dir="", filter="*.fits")
         if not path:
             return False
@@ -716,7 +765,7 @@ class RVTab(QtGui.QWidget):
         kwds["normalization_kwargs"] = kwds.pop("normalization")
         
         # Do we have a template spectrum?
-        if isinstance(kwds.get("template_spectrum",""), string_types) \
+        if isinstance(kwds.get("template_spectrum",""), str) \
         and not os.path.exists(kwds.get("template_spectrum", "")):
             selected_valid_template = self.select_template()
             if not selected_valid_template:
@@ -735,7 +784,12 @@ class RVTab(QtGui.QWidget):
         print("rv uncertainty: {:.1f}".format(rv_uncertainty))
 
         # Update the measured radial velocity in the GUI.
-        self.rv_applied.setText("{0:+.1f}".format(rv))
+        # self.rv_applied.setText("{0:+.1f}".format(rv))
+        rv_dict = self.parent.session.metadata["rv"]
+        rv_dict["rv_measured"] = rv
+        rv_dict["rv_uncertainty"] = rv_uncertainty
+        self._update_rv_summary(rv_dict)
+
 
         # Draw the CCF in the bottom panel.
         self.redraw_ccf(refresh=True)
@@ -772,7 +826,7 @@ class RVTab(QtGui.QWidget):
         Correct the radial velocity of the observed spectra.
         """
         if "rv_applied" in  self.parent.session.metadata["rv"]:
-            rv_diff = np.float(self.rv_applied.text()) + self.parent.session.metadata["rv"]["rv_applied"]
+            rv_diff = float(self.rv_applied.text()) + self.parent.session.metadata["rv"]["rv_applied"]
         else:
             rv_diff = 0.0
         
@@ -904,7 +958,7 @@ class RVTab(QtGui.QWidget):
 
     def launch_rvregion_dialog(self):
         dialog = RVRegionDialog(self)
-        code = dialog.exec_()
+        code = dialog.exec()
         logger.debug("RVRegionDialog Code: {}".format(code))
         self._populate_widgets()
         self.draw_template()
@@ -913,7 +967,7 @@ class RVTab(QtGui.QWidget):
 
         return code
     
-class RVRegionDialog(QtGui.QDialog):
+class RVRegionDialog(QtWidgets.QDialog):
     def __init__(self, rv_tab, *args):
         """
         Initialise a dialog to set new RV correction regions.
@@ -927,40 +981,38 @@ class RVRegionDialog(QtGui.QDialog):
         self.rv_tab = rv_tab
 
         self.setGeometry(900, 900, 900, 600)
-        desktop = QtGui.QApplication.desktop()
-        self.move(desktop.screen().rect().center() \
-            - self.rect().center())
-
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        screen = self.screen() if self.screen() else QtWidgets.QApplication.primaryScreen()
+        self.move(screen.geometry().center() - self.rect().center())
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
-        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
-        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
-        spacerItem2 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
+        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        spacerItem1 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        spacerItem2 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
 
         self.setObjectName("RVRegionDialog")
         self.setAutoFillBackground(False)
-        self.horizontalLayout = QtGui.QHBoxLayout(self)
-        self.horizontalLayout_2 = QtGui.QHBoxLayout()
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self)
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
 
         ## Left column
-        self.verticalLayout_2 = QtGui.QVBoxLayout()
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout()
         self.verticalLayout_2.addItem(spacerItem)
-        self.listWidget = QtGui.QListWidget(self)
+        self.listWidget = QtWidgets.QListWidget(self)
         self.listWidget.setObjectName("listWidget")
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.listWidget.sizePolicy().hasHeightForWidth())
         self.listWidget.setSizePolicy(sp)
         self.verticalLayout_2.addWidget(self.listWidget)
-        self.button_savedefault = QtGui.QPushButton(self)
+        self.button_savedefault = QtWidgets.QPushButton(self)
         self.button_savedefault.setObjectName("button_savedefault")
-        self.button_savesession = QtGui.QPushButton(self)
+        self.button_savesession = QtWidgets.QPushButton(self)
         self.button_savesession.setObjectName("button_savesession")
         self.verticalLayout_2.addWidget(self.button_savedefault)
         self.verticalLayout_2.addWidget(self.button_savesession)
@@ -970,10 +1022,10 @@ class RVRegionDialog(QtGui.QDialog):
         self.button_savesession.clicked.connect(self.save_to_session)
 
         ## Right column MPL widget
-        self.verticalLayout = QtGui.QVBoxLayout()
-        blank_widget = QtGui.QWidget(self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding)
+        self.verticalLayout = QtWidgets.QVBoxLayout()
+        blank_widget = QtWidgets.QWidget(self)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(blank_widget.sizePolicy().hasHeightForWidth())
@@ -983,7 +1035,7 @@ class RVRegionDialog(QtGui.QDialog):
                                       autofocus=True)
         self.mpl_plot.setObjectName("mpl_plot")
 
-        layout = QtGui.QVBoxLayout(blank_widget)
+        layout = QtWidgets.QVBoxLayout(blank_widget)
         layout.addWidget(self.mpl_plot, 1)
         self.verticalLayout.addWidget(blank_widget)
 
@@ -1011,23 +1063,23 @@ class RVRegionDialog(QtGui.QDialog):
         self.ax_order_norm.set_ylabel("Normalized flux")
 
         # Right column wavelength regions
-        self.horizontalLayout_4 = QtGui.QHBoxLayout()
+        self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
-        self.label = QtGui.QLabel(self)
+        self.label = QtWidgets.QLabel(self)
         self.label.setAlignment(QtCore.Qt.AlignCenter)
         self.label.setObjectName("Lower Wavelength")
         self.horizontalLayout_4.addWidget(self.label)
-        self.label_2 = QtGui.QLabel(self)
+        self.label_2 = QtWidgets.QLabel(self)
         self.label_2.setAlignment(QtCore.Qt.AlignCenter)
         self.label_2.setObjectName("Upper Wavelength")
         self.horizontalLayout_4.addWidget(self.label_2)
         self.verticalLayout.addLayout(self.horizontalLayout_4)
-        self.horizontalLayout_3 = QtGui.QHBoxLayout()
+        self.horizontalLayout_3 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
-        self.text_lower_wl = QtGui.QLineEdit(self)
+        self.text_lower_wl = QtWidgets.QLineEdit(self)
         self.text_lower_wl.setObjectName("Lower Wavelength Value")
         self.horizontalLayout_3.addWidget(self.text_lower_wl)
-        self.text_upper_wl = QtGui.QLineEdit(self)
+        self.text_upper_wl = QtWidgets.QLineEdit(self)
         self.text_upper_wl.setObjectName("Upper Wavelength Value")
         self.horizontalLayout_3.addWidget(self.text_upper_wl)
         self.verticalLayout.addLayout(self.horizontalLayout_3)
@@ -1036,11 +1088,11 @@ class RVRegionDialog(QtGui.QDialog):
         self.text_upper_wl.textChanged.connect(self.wl_value_changed)
 
         # Right column buttons
-        self.button_savetolist = QtGui.QPushButton(self)
+        self.button_savetolist = QtWidgets.QPushButton(self)
         self.button_savetolist.setObjectName("button_savetolist")
         self.verticalLayout.addWidget(self.button_savetolist)
         self.verticalLayout.addItem(spacerItem2)
-        self.button_exit = QtGui.QPushButton(self)
+        self.button_exit = QtWidgets.QPushButton(self)
         self.button_exit.setObjectName("button_exit")
         self.verticalLayout.addWidget(self.button_exit)
         self.horizontalLayout_2.addLayout(self.verticalLayout)
@@ -1079,12 +1131,12 @@ class RVRegionDialog(QtGui.QDialog):
     def list_context_menu(self, pos):
         """
         """
-        menu = QtGui.QMenu(self.listWidget)
+        menu = QtWidgets.QMenu(self.listWidget)
         delete_action = menu.addAction("Delete")
         any_selected = len(self.listWidget.selectionModel().selectedRows()) > 0
         if not any_selected:
             delete_action.setEnabled(False)
-        action = menu.exec_(self.listWidget.mapToGlobal(pos))
+        action = menu.exec(self.listWidget.mapToGlobal(pos))
         if action == delete_action:
             self.delete_current_line()
         return None
@@ -1270,10 +1322,10 @@ class RVRegionDialog(QtGui.QDialog):
 if __name__ == "__main__":
 
     # This is just for development testing.
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     #window = RVRegionDialog(None)
-    #window.exec_()
-    widget = QtGui.QWidget(None)
+    #window.exec()
+    widget = QtWidgets.QWidget(None)
 
     with open(Session._default_settings_path, "rb") as fp:
         try:
@@ -1290,9 +1342,9 @@ if __name__ == "__main__":
     
     rv_tab = RVTab(widget)
     rv_tab.update_from_new_session()
-    rv_tab.template_path = QtGui.QLineEdit()
+    rv_tab.template_path = QtWidgets.QLineEdit()
     rv_tab.template_path.setText(datadir+'/spectra/hd122563.fits')
     
     dialog = RVRegionDialog(rv_tab)
 
-    dialog.exec_()
+    dialog.exec()

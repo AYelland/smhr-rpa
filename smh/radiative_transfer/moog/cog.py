@@ -13,7 +13,7 @@ import logging
 import numpy as np
 import re
 import yaml
-from pkg_resources import resource_stream
+from importlib.resources import files
 
 from . import utils
 from .utils import RTError
@@ -23,11 +23,13 @@ from smh import linelists
 logger = logging.getLogger(__name__)
 
 # Load the MOOG defaults.
-with resource_stream(__name__, "defaults.yaml") as fp:
-    try:
-        _moog_defaults = yaml.load(fp, yaml.FullLoader)
-    except AttributeError:
-        _moog_defaults = yaml.load(fp)
+# with resource_stream(__name__, "defaults.yaml") as fp:
+#     try:
+#         _moog_defaults = yaml.load(fp, yaml.FullLoader)
+#     except AttributeError:
+#         _moog_defaults = yaml.load(fp)
+_moog_defaults = yaml.safe_load(
+    (files(__package__) / "defaults.yaml").read_text())
 
 def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     twd=None, **kwargs):
@@ -69,8 +71,7 @@ def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     transitions.write(lines_in, format="moog")
     
     # Load the abfind driver template.
-    with resource_stream(__name__, "abfind.in") as fp:
-        template = fp.read().decode("utf-8")
+    template = (files(__package__) / "abfind.in").read_text(encoding="utf-8")
 
     # Not these are SMH defaults, not MOOG defaults.
     kwds = _moog_defaults.copy()
@@ -211,7 +212,7 @@ def _parse_abfind_summary(summary_out_path):
                 #    abundances = list(np.delete(abundances, exists, axis=0))
             """
             
-        elif re.match("^\s{2,3}[0-9]", line):
+        elif re.match(r"^\s{2,3}[0-9]", line):
             if species is None:
                 raise IOError("Could not find the species!")
                 

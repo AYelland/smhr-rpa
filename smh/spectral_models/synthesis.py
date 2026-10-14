@@ -15,7 +15,6 @@ import numpy as np
 import scipy.optimize as op
 import scipy.interpolate
 from collections import OrderedDict
-from six import string_types, iteritems
 from scipy.ndimage import gaussian_filter
 from scipy import stats
 
@@ -228,7 +227,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         """
 
         # Format the elements and then check that all are real.
-        if isinstance(elements, string_types):
+        if isinstance(elements, str):
             elements = [elements]
 
         elements = [str(element).title() for element in elements]
@@ -250,7 +249,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
 
     def _verify_species(self, elements, what_species=None):
         # Format the elements and then check that all are real.
-        if isinstance(elements, string_types):
+        if isinstance(elements, str):
             elements = [elements]
 
         elements = [str(element).title() for element in elements]
@@ -529,7 +528,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
             abund = self.abundances[0]
             if np.abs(abund - lastabund) < tol: break
         else:
-            logger.warn("iterfit: Reached {}/{} iter without converging. Now {:.3f}, last {:.3f}, tol={:.3f}".format(
+            logger.warning("iterfit: Reached {}/{} iter without converging. Now {:.3f}, last {:.3f}, tol={:.3f}".format(
                     i, maxiter, abund, lastabund, tol))
         return abund
 
@@ -556,7 +555,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
             plot_x = meta["model_x"]
             plot_y = meta["model_y"]
             if self.session.setting("full_synth_resolution", False):
-                logger.warn("Note: exporting synthesis sampled at data points, not full synth resolution!")
+                logger.warning("Note: exporting synthesis sampled at data points, not full synth resolution!")
 
         if len(meta["plot_x"]) != len(ivar):
             synth_spec = Spectrum1D(meta["plot_x"], meta["plot_y"], np.ones(len(meta["plot_x"]))*1e6)
@@ -578,18 +577,18 @@ class SpectralSynthesisModel(BaseSpectralModel):
                 fp.write("{} {:.3f}\n".format(elem, abund))
             fp.write("\n")
             fp.write("----------Fixed Abundances----------\n")
-            for elem, abund in iteritems(self.metadata["rt_abundances"]):
+            for elem, abund in self.metadata["rt_abundances"].items():
                 fp.write("{} {:.3f}\n".format(elem, abund))
             fp.write("\n")
             fp.write("p_opt: {}\n".format(named_p_opt))
             fp.write("cov: {}\n".format(cov))
             fp.write("\n")
             fp.write("----------Parameters----------\n")
-            for key, value in iteritems(self.metadata):
+            for key, value in self.metadata.items():
                 if key=="rt_abundances": continue
                 if key=="fitted_result": continue
                 fp.write("{}: {}\n".format(key, value))
-            for key, value in iteritems(meta):
+            for key, value in meta.items():
                 if key in ['chi_sq','dof']:
                     fp.write("{}: {}\n".format(key, value))
             fp.write("\n")
@@ -614,7 +613,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         try:
             named_p, cov, meta = self.metadata["fitted_result"]
         except KeyError:
-            logger.warn("No fit run yet!")
+            logger.warning("No fit run yet!")
             return None
         elem = self.elements[0]
         assert "log_eps({})".format(elem) in named_p

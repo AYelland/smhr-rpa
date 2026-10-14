@@ -9,10 +9,10 @@ from __future__ import (division, print_function, absolute_import,
 
 import operator
 import numpy as np
-from PySide2 import (QtCore, QtWidgets as QtGui)
+from PySide6 import QtCore, QtWidgets
 from time import time
 
-import mpl
+from smh.gui import mpl
 
 DOUBLE_CLICK_INTERVAL = 0.1 # MAGIC HACK
 
@@ -84,7 +84,7 @@ class SpectralModelsTableModel(QtCore.QAbstractTableModel):
 
     def sort(self, column, order):
 
-        self.emit(QtCore.SIGNAL("layoutAboutToBeChanged()"))
+        self.layoutAboutToBeChanged.emit()
         self._data = sorted(self._data,
             key=lambda sm: getattr(sm, self.attrs[column]))
         
@@ -93,7 +93,7 @@ class SpectralModelsTableModel(QtCore.QAbstractTableModel):
 
         self.dataChanged.emit(self.createIndex(0, 0),
             self.createIndex(self.rowCount(0), self.columnCount(0)))
-        self.emit(QtCore.SIGNAL("layoutChanged()"))
+        self.layoutChanged.emit()
 
 
     def flags(self, index):
@@ -103,7 +103,7 @@ class SpectralModelsTableModel(QtCore.QAbstractTableModel):
 
 
 
-class SpectralModelsWidget(QtGui.QWidget):
+class SpectralModelsWidget(QtWidgets.QWidget):
     def __init__(self, spectral_models, *args):
         """
         Initialize a widget for inspecting a list of spectral models.
@@ -119,25 +119,25 @@ class SpectralModelsWidget(QtGui.QWidget):
         self.setGeometry(300, 200, 570, 450)
         self.setWindowTitle("Spectral models")
 
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
-        self.table = QtGui.QTableView()
+        self.table = QtWidgets.QTableView()
         self.table.setModel(SpectralModelsTableModel(self, spectral_models))
         self.table.resizeColumnsToContents()
-        self.table.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSortingEnabled(True)
 
         _ = self.table.selectionModel()
         _.selectionChanged.connect(self.row_selected)
 
         # Create a matplotlib widget.
-        blank_widget = QtGui.QWidget(self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        blank_widget = QtWidgets.QWidget(self)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(blank_widget.sizePolicy().hasHeightForWidth())
@@ -146,10 +146,10 @@ class SpectralModelsWidget(QtGui.QWidget):
         self.mpl_figure = mpl.MPLWidget(blank_widget, 
             tight_layout=True, autofocus=True)
 
-        mpl_layout = QtGui.QVBoxLayout(blank_widget)
+        mpl_layout = QtWidgets.QVBoxLayout(blank_widget)
         mpl_layout.addWidget(self.mpl_figure, 1)
 
-        layout = QtGui.QHBoxLayout(self)
+        layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.addWidget(self.table)
         layout.addWidget(blank_widget)
@@ -243,7 +243,7 @@ class SpectralModelsWidget(QtGui.QWidget):
             try:
                 self._mask_region
             except AttributeError:
-                self._mask_region = self.mpl_axis.axvspan(**{
+                self._mask_region = mpl.axvspan_polygon(self.mpl_axis, **{
                     "xmin": xmin,
                     "xmax": xmax,
                     "ymin": ymin,
@@ -387,9 +387,11 @@ class SpectralModelsWidget(QtGui.QWidget):
             try:
                 patch = self._mpl_masked_regions[i]
             except IndexError:
-                self._mpl_masked_regions.append(self.mpl_axis.axvspan(
-                    np.nan, np.nan, facecolor="r", edgecolor="None",
-                    alpha=0.25))
+                self._mpl_masked_regions.append(
+                    mpl.axvspan_polygon(self.mpl_axis,
+                        xmin=np.nan, xmax=np.nan,
+                        facecolor="r", edgecolor="None", alpha=0.25)
+                )
                 patch = self._mpl_masked_regions[-1]
 
             patch.set_xy([
@@ -426,7 +428,8 @@ class SpectralModelsWidget(QtGui.QWidget):
                         patch = self._mpl_nearby_lines_masked_regions[i]
                     except IndexError:
                         self._mpl_nearby_lines_masked_regions.append(
-                            self.mpl_axis.axvspan(np.nan, np.nan,
+                            mpl.axvspan_polygon(self.mpl_axis,
+                                xmin=np.nan, xmax=np.nan,
                                 facecolor="b", edgecolor=None, alpha=0.25))
                         patch = self._mpl_nearby_lines_masked_regions[-1]
 
@@ -477,8 +480,8 @@ if __name__ == "__main__":
                 transitions["elem1"][i]))
 
     
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = SpectralModelsWidget(foo)
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
     

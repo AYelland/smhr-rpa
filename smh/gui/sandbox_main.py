@@ -8,7 +8,7 @@ from __future__ import (division, print_function, absolute_import,
 
 import logging
 logging.basicConfig()
-from PySide2 import (QtCore, QtWidgets as QtGui)
+from PySide6 import QtCore, QtWidgets
 import yaml
 import time, os, sys
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     # Create the app and clean up any style bugs.
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
 
     except RuntimeError:
         # For development.
@@ -48,7 +48,7 @@ if __name__ == '__main__':
             (".Helvetica Neue DeskInterface", "Helvetica Neue")
         ]
         for substitute in substitutes:
-            QtGui.QFont.insertSubstitution(*substitute)
+            QtWidgets.QFont.insertSubstitution(*substitute)
 
     # Create a global exception hook.
     sys._excepthook = sys.excepthook
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         # Load a GUI that shows the exception.
         exception_gui = exception.ExceptionWidget(
             exception_type, message, traceback)
-        exception_gui.exec_()
+        exception_gui.exec()
 
         # Ignore future exceptions of this kind?
         if exception_gui.ignore_in_future:
@@ -145,4 +145,4 @@ if __name__ == '__main__':
     #assert total_diff == 0, total_diff
 
     app.window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

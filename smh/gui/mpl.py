@@ -18,15 +18,29 @@ simplefilter("ignore", UserWarning)
 # Load our matplotlibrc file.
 matplotlib.rc_file(os.path.join(os.path.dirname(__file__), "matplotlibrc"))
 
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-#from matplotlib.backends.backend_qt4agg \
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+#from matplotlib.backends.backend_qtagg \
 #    import NavigationToolbar2QTAgg as NavigationToolbar
 
 from matplotlib.figure import Figure
+from matplotlib.patches import Polygon
 
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
+from PySide6 import QtCore, QtGui, QtWidgets
 
 DOUBLE_CLICK_INTERVAL = 0.1 # MAGIC HACK
+
+from matplotlib.patches import Polygon
+
+def axvspan_polygon(ax, xmin, xmax, ymin=0, ymax=1, **kwargs):
+    """Like Axes.axvspan, but always returns a Polygon. Matplotlib >= 3.9
+    returns a Rectangle, whose set_xy accepts only a single corner."""
+    polygon = Polygon(
+        [[xmin, ymin], [xmin, ymax], [xmax, ymax], [xmax, ymin]],
+        closed=True,
+        transform=ax.get_xaxis_transform(),
+        **kwargs)
+    ax.add_patch(polygon)
+    return polygon
 
 class MPLWidget(FigureCanvas):
     """
@@ -53,10 +67,15 @@ class MPLWidget(FigureCanvas):
         unzoom_on_z_press: MPLWidget.mpl_connect("key_press_event")
         reset_zoom_limits(ax): call whenever you reset limits on an axis and want it to be zoomable
         """
-        super(MPLWidget, self).__init__(Figure())
-        
-        self.figure = Figure(tight_layout=tight_layout)
-        self.canvas = FigureCanvas(self.figure)
+        # super(MPLWidget, self).__init__(Figure())
+        # self.figure = Figure(tight_layout=tight_layout)
+        # self.canvas = FigureCanvas(self.figure)
+
+        figure = Figure(tight_layout=tight_layout)
+        super(MPLWidget, self).__init__(figure)
+
+        self.figure = figure
+        self.canvas = self
         self.canvas.setParent(parent)
 
         # Focus the canvas initially.
@@ -73,13 +92,12 @@ class MPLWidget(FigureCanvas):
         # points darker.
         #if background_hack is not None:
         #    bg_color = [(_ - 10)/255. for _ in \
-        #        parent.palette().color(QtGui.QPalette.Window).getRgb()[:3]]
+        #        parent.palette().color(QtWidgets.QPalette.Window).getRgb()[:3]]
         #    background_hack.figure.patch.set_facecolor(bg_color)
 
         if background_hack:
             self.figure.patch.set_facecolor([(_ - 10)/255. for _ in \
-                self.palette().color(QtGui2.QPalette.Window).getRgb()[:3]])
-
+                self.palette().color(QtGui.QPalette.Window).getRgb()[:3]])
 
         if autofocus:
             self._autofocus_cid = self.canvas.mpl_connect(
@@ -421,7 +439,7 @@ class MPLWidget(FigureCanvas):
         except AttributeError:
             return None
         
-        xy = self._mask_interactive_region.values()[0].get_xy()
+        xy = next(iter(self._mask_interactive_region.values())).get_xy()
         
         xdata = event.xdata if event.xdata is not None else xy[2, 0]
 

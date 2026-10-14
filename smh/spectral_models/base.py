@@ -66,8 +66,7 @@ class BaseSpectralModel(object):
         Return a (sometimes approximate) wavelength for where this spectral line
         occurs.
         """
-
-        if len(self.transitions) == 1: return float(self.transitions["wavelength"])
+        if len(self.transitions) == 1: return float(self.transitions["wavelength"].item())
         if "wavelength" in self.metadata:
             return self.metadata["wavelength"]
         wavelength = np.mean(self.transitions["wavelength"])

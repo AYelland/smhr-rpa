@@ -14,7 +14,7 @@ import traceback as tb
 #from tempfile import mkstemp
 from smh.utils import mkstemp
 from urllib.parse import quote
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
+from PySide6 import QtCore, QtGui, QtWidgets
 
 #from smh import __git_status__
 
@@ -31,13 +31,13 @@ def format(color, style=None):
         The styling for the text.
 
     """
-    _color = QtGui2.QColor()
+    _color = QtGui.QColor()
     _color.setNamedColor(color)
 
-    _format = QtGui2.QTextCharFormat()
+    _format = QtGui.QTextCharFormat()
     _format.setForeground(_color)
     if style is not None and 'bold' in style:
-        _format.setFontWeight(QtGui2.QFont.Bold)
+        _format.setFontWeight(QtGui.QFont.Bold)
     if style is not None and 'italic' in style:
         _format.setFontItalic(True)
 
@@ -57,7 +57,7 @@ STYLES = {
     'numbers': format('brown'),
 }
 
-class PythonHighlighter(QtGui2.QSyntaxHighlighter):
+class PythonHighlighter(QtGui.QSyntaxHighlighter):
     """
     Syntax highlighter for the Python language.
     """
@@ -73,29 +73,29 @@ class PythonHighlighter(QtGui2.QSyntaxHighlighter):
 
     # Python operators
     operators = [
-        '=',
+        r'=',
         # Comparison
-        '==', '!=', '<', '<=', '>', '>=',
+        r'==', r'!=', r'<', r'<=', r'>', r'>=',
         # Arithmetic
-        '\+', '-', '\*', '/', '//', '\%', '\*\*',
+        r'\+', r'-', r'\*', r'/', r'//', r'\%', r'\*\*',
         # In-place
-        '\+=', '-=', '\*=', '/=', '\%=',
+        r'\+=', r'-=', r'\*=', r'/=', r'\%=',
         # Bitwise
-        '\^', '\|', '\&', '\~', '>>', '<<',
+        r'\^', r'\|', r'\&', r'\~', '>>', '<<',
     ]
 
     # Python braces
     braces = [
-        '\{', '\}', '\(', '\)', '\[', '\]',
+        r'\{', r'\}', r'\(', r'\)', r'\[', r'\]',
     ]
     def __init__(self, document):
-        QtGui2.QSyntaxHighlighter.__init__(self, document)
+        QtGui.QSyntaxHighlighter.__init__(self, document)
 
         # Multi-line strings (expression, flag, style)
         # FIXME: The triple-quotes in these two lines will mess up the
         # syntax highlighting from this point onward
-        self.tri_single = (QtCore.QRegExp("'''"), 1, STYLES['string2'])
-        self.tri_double = (QtCore.QRegExp('"""'), 2, STYLES['string2'])
+        self.tri_single = (QtCore.QRegularExpression("'''"), 1, STYLES['string2'])
+        self.tri_double = (QtCore.QRegularExpression('"""'), 2, STYLES['string2'])
 
         rules = []
 
@@ -131,8 +131,8 @@ class PythonHighlighter(QtGui2.QSyntaxHighlighter):
             (r'\b[+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\b', 0, STYLES['numbers']),
         ]
 
-        # Build a QRegExp for each pattern
-        self.rules = [(QtCore.QRegExp(pat), index, fmt)
+        # Build a QRegularExpression for each pattern
+        self.rules = [(QtCore.QRegularExpression(pat), index, fmt)
             for (pat, index, fmt) in rules]
 
 
@@ -140,15 +140,13 @@ class PythonHighlighter(QtGui2.QSyntaxHighlighter):
         """Apply syntax highlighting to the given block of text.
         """
         # Do other syntax formatting
-        for expression, nth, format in self.rules:
-            index = expression.indexIn(text, 0)
-
-            while index >= 0:
-                # We actually want the index of the nth match
-                index = expression.pos(nth)
-                length = len(expression.cap(nth))
-                self.setFormat(index, length, format)
-                index = expression.indexIn(text, index + length)
+        for expression, nth, fmt in self.rules:
+            it = expression.globalMatch(text)
+            while it.hasNext():
+                m = it.next()
+                start = m.capturedStart(nth)
+                if start >= 0:
+                    self.setFormat(start, m.capturedLength(nth), fmt)
 
         self.setCurrentBlockState(0)
 
@@ -160,10 +158,10 @@ class PythonHighlighter(QtGui2.QSyntaxHighlighter):
 
     def match_multiline(self, text, delimiter, in_state, style):
         """Do highlighting of multi-line strings. ``delimiter`` should be a
-        ``QRegExp`` for triple-single-quotes or triple-double-quotes, and
-        ``in_state`` should be a unique integer to represent the corresponding
-        state changes when inside those strings. Returns True if we're still
-        inside a multi-line string when this function is finished.
+        ``QRegularExpression`` for triple-single-quotes or triple-double-quotes,
+        and ``in_state`` should be a unique integer to represent the
+        corresponding state changes when inside those strings. Returns True if
+        we're still inside a multi-line string when this function is finished.
         """
         # If inside triple-single quotes, start at 0
         if self.previousBlockState() == in_state:
@@ -171,17 +169,19 @@ class PythonHighlighter(QtGui2.QSyntaxHighlighter):
             add = 0
         # Otherwise, look for the delimiter on this line
         else:
-            start = delimiter.indexIn(text)
+            m = delimiter.match(text)
+            start = m.capturedStart() if m.hasMatch() else -1
             # Move past this match
-            add = delimiter.matchedLength()
+            add = m.capturedLength() if m.hasMatch() else 0
 
         # As long as there's a delimiter match on this line...
         while start >= 0:
             # Look for the ending delimiter
-            end = delimiter.indexIn(text, start + add)
+            m = delimiter.match(text, start + add)
+            end = m.capturedStart() if m.hasMatch() else -1
             # Ending delimiter on this line?
             if end >= add:
-                length = end - start + add + delimiter.matchedLength()
+                length = end - start + add + m.capturedLength()
                 self.setCurrentBlockState(0)
             # No; multi-line string
             else:
@@ -190,17 +190,14 @@ class PythonHighlighter(QtGui2.QSyntaxHighlighter):
             # Apply formatting
             self.setFormat(start, length, style)
             # Look for the next match
-            start = delimiter.indexIn(text, start + length)
+            m = delimiter.match(text, start + length)
+            start = m.capturedStart() if m.hasMatch() else -1
 
         # Return True if still inside a multi-line string, False otherwise
-        if self.currentBlockState() == in_state:
-            return True
-        else:
-            return False
+        return self.currentBlockState() == in_state
 
 
-
-class ExceptionWidget(QtGui.QDialog):
+class ExceptionWidget(QtWidgets.QDialog):
     def __init__(self, exception_type, message, traceback, *args):
         """
         Initialize a widget to display details about an exception that was
@@ -224,30 +221,29 @@ class ExceptionWidget(QtGui.QDialog):
         self.traceback = traceback
 
         self.setGeometry(600, 400, 600, 400)
-        desktop = QtGui.QApplication.desktop()
-        self.move(desktop.screen().rect().center() \
-            - self.rect().center())
+        screen = QtGui.QGuiApplication.primaryScreen()
+        self.move(screen.availableGeometry().center() - self.rect().center())
         self.setWindowTitle("Exception")
 
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
 
-        vertical_layout = QtGui.QVBoxLayout(self)
+        vertical_layout = QtWidgets.QVBoxLayout(self)
 
         # Label to explain what an exception is.
-        label = QtGui.QLabel(self)
+        label = QtWidgets.QLabel(self)
         label.setText(
             "An unexpected exception has occurred. The traceback and detailed "
             "information is available below.")
         vertical_layout.addWidget(label)
 
         # Text browser to display the exception details.
-        self.show_traceback = QtGui.QPlainTextEdit(self)
-        self.show_traceback.setFont(QtGui2.QFont("Courier", 12))
+        self.show_traceback = QtWidgets.QPlainTextEdit(self)
+        self.show_traceback.setFont(QtGui.QFont("Menlo", 12))
         self.show_traceback.setReadOnly(True)
         self.show_traceback.setPlainText("\n" + \
             "\n".join(tb.format_exception(exception_type, message, traceback)))
@@ -258,20 +254,20 @@ class ExceptionWidget(QtGui.QDialog):
         vertical_layout.addWidget(self.show_traceback)
 
         # Horizontal layout with buttons.
-        horizontal_layout = QtGui.QHBoxLayout()
-        self.btn_ignore = QtGui.QPushButton(self)
+        horizontal_layout = QtWidgets.QHBoxLayout()
+        self.btn_ignore = QtWidgets.QPushButton(self)
         self.btn_ignore.setText("Ignore exceptions of this kind")
         horizontal_layout.addWidget(self.btn_ignore)
 
-        self.btn_create_issue = QtGui.QPushButton(self)
+        self.btn_create_issue = QtWidgets.QPushButton(self)
         self.btn_create_issue.setText("Create GitHub issue..")
         horizontal_layout.addWidget(self.btn_create_issue)
 
         # Spacer with a minimum width.
-        horizontal_layout.addItem(QtGui.QSpacerItem(40, 20, 
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        horizontal_layout.addItem(QtWidgets.QSpacerItem(40, 20, 
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
 
-        self.btn_ok = QtGui.QPushButton(self)
+        self.btn_ok = QtWidgets.QPushButton(self)
         self.btn_ok.setText("OK")
         self.btn_ok.setDefault(True)
         self.btn_ok.setFocus()
@@ -317,7 +313,7 @@ class ExceptionWidget(QtGui.QDialog):
         screenshot_url = None
         logger.info("Taking and uploading screenshot..")
         try:
-            screenshot = QtGui.QPixmap.grabWindow(parent.winId())
+            screenshot = QtWidgets.QPixmap.grabWindow(parent.winId())
             _, path = mkstemp(suffix=".png")
             screenshot.save(path, "png")
 
@@ -328,7 +324,7 @@ class ExceptionWidget(QtGui.QDialog):
             if response.status_code == 200:
                 screenshot_url = response.text.strip()  
             else:
-                logger.warn("Screenshot could not be uploaded (response {})"\
+                logger.warning("Screenshot could not be uploaded (response {})"\
                     .format(response.status_code))
 
             os.remove(path)
@@ -352,7 +348,7 @@ class ExceptionWidget(QtGui.QDialog):
                     response.text.strip())
 
             else:
-                logger.warn("Session could not be uploaded (response {})".format(
+                logger.warning("Session could not be uploaded (response {})".format(
                         response.status_code))
 
             os.remove(path)
@@ -399,14 +395,14 @@ if sys.platform == "darwin":
         (".Helvetica Neue DeskInterface", "Helvetica Neue")
     ]
     for substitute in substitutes:
-        QtGui2.QFont.insertSubstitution(*substitute)
+        QtGui.QFont.insertSubstitution(*substitute)
 
 
 if __name__ == "__main__":
 
     # This is just for development testing.
-    #app = QtGui.QApplication(sys.argv)
+    #app = QtWidgets.QApplication(sys.argv)
     window = ExceptionWidget("something", "message", "traceback")
-    window.exec_()
+    window.exec()
 
     

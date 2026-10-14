@@ -11,15 +11,12 @@ __all__ = ["NormalizationTab"]
 import logging
 import numpy as np
 import sys
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
+from PySide6 import QtCore, QtGui, QtWidgets
 from time import time
-
 from matplotlib import gridspec
 
-import mpl
+from smh.gui import mpl, global_masks_manager
 
-# This is a bad idea, but it's April 1st.
-from style_utils import wavelength_to_hex
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +32,6 @@ DOUBLE_CLICK_INTERVAL = 0.0 # MAGIC HACK
 # The pixel tolerance to select and remove an additional point.
 PIXEL_PICKER_TOLERANCE = 30 # MAGIC HACK
 
-
 def dict_updated(default, new, exclude=None):
     updated = {}
     exclude = exclude or ()
@@ -44,8 +40,7 @@ def dict_updated(default, new, exclude=None):
             updated[key] = (value, new[key])
     return updated
 
-
-class NormalizationTab(QtGui.QWidget):
+class NormalizationTab(QtWidgets.QWidget):
 
     def __init__(self, parent):
         """
@@ -59,34 +54,34 @@ class NormalizationTab(QtGui.QWidget):
         self.parent = parent
 
         # Establish the GUI for this tab.
-        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
         # Create a top-level horizontal layout to contain a MPL figure and
         # a vertical layout of settings..
-        tab_layout = QtGui.QHBoxLayout(self)
+        tab_layout = QtWidgets.QHBoxLayout(self)
         tab_layout.setContentsMargins(20, 20, 20, 0)
         
-        settings_widget = QtGui.QWidget()
-        settings_layout = QtGui.QVBoxLayout(settings_widget)
+        settings_widget = QtWidgets.QWidget()
+        settings_layout = QtWidgets.QVBoxLayout(settings_widget)
         settings_widget.setFixedWidth(300)
         
         # Start the grid layout for the normalization tab.
-        settings_grid_layout = QtGui.QGridLayout()
+        settings_grid_layout = QtWidgets.QGridLayout()
 
         # Normalization function.
-        self.function_label = QtGui.QLabel(self)
+        self.function_label = QtWidgets.QLabel(self)
         self.function_label.setText("Function")
         settings_grid_layout.addWidget(self.function_label, 0, 0, 1, 1)
         
         # Put the normalization function combo box in a horizontal layout with 
         # a spacer.
-        hbox = QtGui.QHBoxLayout()
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.function = QtGui.QComboBox(self)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.function = QtWidgets.QComboBox(self)
         self.function.setObjectName("norm_function")
         hbox.addWidget(self.function)
         settings_grid_layout.addLayout(hbox, 0, 1, 1, 1)
@@ -95,16 +90,16 @@ class NormalizationTab(QtGui.QWidget):
             self.function.addItem(each.title())
 
         # Normalization function order.
-        self.order_label = QtGui.QLabel(self)
+        self.order_label = QtWidgets.QLabel(self)
         self.order_label.setText("Order")
         settings_grid_layout.addWidget(self.order_label, 1, 0, 1, 1)
         
         # Put the normalization order combo box in a horizontal layout with a
         # spacer
-        hbox = QtGui.QHBoxLayout()
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.order = QtGui.QComboBox(self)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.order = QtWidgets.QComboBox(self)
         self.order.setMaximumSize(QtCore.QSize(50, 16777215))
         self.order.setObjectName("norm_order")
         hbox.addWidget(self.order)
@@ -115,16 +110,16 @@ class NormalizationTab(QtGui.QWidget):
             self.order.addItem("{0:.0f}".format(order))
 
         # Maximum number of iterations.
-        self.max_iter_label = QtGui.QLabel(self)
+        self.max_iter_label = QtWidgets.QLabel(self)
         self.max_iter_label.setText("Maximum iterations")
         settings_grid_layout.addWidget(self.max_iter_label, 2, 0, 1, 1)
 
         # Put the maxium number of iterations in a horizontal layout with a 
         # spacer.
-        hbox = QtGui.QHBoxLayout()
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.norm_max_iter = QtGui.QComboBox(self)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.norm_max_iter = QtWidgets.QComboBox(self)
         self.norm_max_iter.setMaximumSize(QtCore.QSize(50, 16777215))
         self.norm_max_iter.setObjectName("norm_norm_max_iter")
         hbox.addWidget(self.norm_max_iter)
@@ -136,61 +131,61 @@ class NormalizationTab(QtGui.QWidget):
 
 
         # Low sigma clipping.
-        self.low_sigma_clip_label = QtGui.QLabel(self)
+        self.low_sigma_clip_label = QtWidgets.QLabel(self)
         self.low_sigma_clip_label.setText("Low sigma clip")
         settings_grid_layout.addWidget(self.low_sigma_clip_label, 3, 0, 1, 1)
 
         # Put the low sigma line edit box in a horizontal layout with a spacer.
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.low_sigma_clip = QtGui.QLineEdit(self)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.low_sigma_clip = QtWidgets.QLineEdit(self)
         self.low_sigma_clip.setMaximumSize(QtCore.QSize(40, 16777215))
         self.low_sigma_clip.setAlignment(QtCore.Qt.AlignCenter)
         self.low_sigma_clip.setObjectName("norm_low_sigma_clip")
         self.low_sigma_clip.setValidator(
-            QtGui2.QDoubleValidator(0, 1000, 2, self.low_sigma_clip))
+            QtGui.QDoubleValidator(0, 1000, 2, self.low_sigma_clip))
 
         hbox.addWidget(self.low_sigma_clip)
         settings_grid_layout.addLayout(hbox, 3, 1, 1, 1)
 
 
         # High sigma clipping.
-        self.high_sigma_clip_label = QtGui.QLabel(self)
+        self.high_sigma_clip_label = QtWidgets.QLabel(self)
         self.high_sigma_clip_label.setText("High sigma clip")
         settings_grid_layout.addWidget(self.high_sigma_clip_label, 4, 0, 1, 1)
 
         # Put the high sigma line edit box in a horizontal layout with a spacer.
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.high_sigma_clip = QtGui.QLineEdit(self)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.high_sigma_clip = QtWidgets.QLineEdit(self)
         self.high_sigma_clip.setMaximumSize(QtCore.QSize(40, 16777215))
         self.high_sigma_clip.setAlignment(QtCore.Qt.AlignCenter)
         self.high_sigma_clip.setObjectName("norm_high_sigma_clip")
         self.high_sigma_clip.setValidator(
-            QtGui2.QDoubleValidator(0, 1000, 2, self.high_sigma_clip))
+            QtGui.QDoubleValidator(0, 1000, 2, self.high_sigma_clip))
         hbox.addWidget(self.high_sigma_clip)
         settings_grid_layout.addLayout(hbox, 4, 1, 1, 1)
         
 
         # Knot spacing.
-        self.knot_spacing_label = QtGui.QLabel(self)
+        self.knot_spacing_label = QtWidgets.QLabel(self)
         settings_grid_layout.addWidget(self.knot_spacing_label, 5, 0, 1, 1)
         self.knot_spacing_label.setText(u"Knot spacing (Å)")
 
         # Put the knot spacing lint edit box in a horizontal layout with a spacer
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.knot_spacing = QtGui.QLineEdit(self)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.knot_spacing = QtWidgets.QLineEdit(self)
         self.knot_spacing.setMaximumSize(QtCore.QSize(40, 16777215))
         self.knot_spacing.setAlignment(QtCore.Qt.AlignCenter)
         self.knot_spacing.setValidator(
-            QtGui2.QDoubleValidator(0, 10000, 0, self.knot_spacing))
+            QtGui.QDoubleValidator(0, 10000, 0, self.knot_spacing))
         self.knot_spacing.setObjectName("norm_knot_spacing")
         hbox.addWidget(self.knot_spacing)
         settings_grid_layout.addLayout(hbox, 5, 1, 1, 1)
@@ -198,37 +193,37 @@ class NormalizationTab(QtGui.QWidget):
         # -----------------------------------------------------------------
         # E. Holmbeck added these lines
         # Blue trimming.
-        self.blue_trim_label = QtGui.QLabel(self)
+        self.blue_trim_label = QtWidgets.QLabel(self)
         settings_grid_layout.addWidget(self.blue_trim_label, 6, 0, 1, 1)
         self.blue_trim_label.setText(u"Blue trim (pixels)")
 
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.blue_trim = QtGui.QLineEdit(self)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.blue_trim = QtWidgets.QLineEdit(self)
         self.blue_trim.setMaximumSize(QtCore.QSize(40, 16777215))
         self.blue_trim.setAlignment(QtCore.Qt.AlignCenter)
         self.blue_trim.setValidator(
-            QtGui2.QDoubleValidator(0, 10000, 0, self.blue_trim))
+            QtGui.QDoubleValidator(0, 10000, 0, self.blue_trim))
         self.blue_trim.setObjectName("blue_trim")
         hbox.addWidget(self.blue_trim)
         settings_grid_layout.addLayout(hbox, 6, 1, 1, 1)
 
         # Red trimming.
-        self.red_trim_label = QtGui.QLabel(self)
+        self.red_trim_label = QtWidgets.QLabel(self)
         settings_grid_layout.addWidget(self.red_trim_label, 7, 0, 1, 1)
         self.red_trim_label.setText(u"Red trim (pixels)")
 
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(-1, -1, 5, -1)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
-        self.red_trim = QtGui.QLineEdit(self)
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
+        self.red_trim = QtWidgets.QLineEdit(self)
         self.red_trim.setMaximumSize(QtCore.QSize(40, 16777215))
         self.red_trim.setAlignment(QtCore.Qt.AlignCenter)
         self.red_trim.setValidator(
-            QtGui2.QDoubleValidator(0, 10000, 0, self.red_trim))
+            QtGui.QDoubleValidator(0, 10000, 0, self.red_trim))
         self.red_trim.setObjectName("red_trim")
         hbox.addWidget(self.red_trim)
         settings_grid_layout.addLayout(hbox, 7, 1, 1, 1)
@@ -238,61 +233,63 @@ class NormalizationTab(QtGui.QWidget):
         settings_layout.addLayout(settings_grid_layout)
 
         # Add a label.
-        label = QtGui.QLabel(self)
+        label = QtWidgets.QLabel(self)
         label.setText("Global continuum mask:")
         settings_layout.addWidget(label)
 
         # Add options for continuum mask.
-        hbox = QtGui.QHBoxLayout()
-        self.continuum_mask = QtGui.QComboBox(self)
+        hbox = QtWidgets.QHBoxLayout()
+        self.continuum_mask = QtWidgets.QComboBox(self)
         self.continuum_mask.setObjectName("contiuum_mask")
         hbox.addWidget(self.continuum_mask)
+        self.continuum_mask.currentIndexChanged.connect(self.update_global_mask_selection)
         hbox.addItem(
-            QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding,
-                QtGui.QSizePolicy.Minimum))
-        self.edit_continuum_masks = QtGui.QPushButton(self)
-        self.edit_continuum_masks.setObjectName("edit_continuum_masks")
-        self.edit_continuum_masks.setText("Edit masks..")
-        hbox.addWidget(self.edit_continuum_masks)
+            QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Minimum))
+        self.edit_global_masks_button = QtWidgets.QPushButton(self)
+        self.edit_global_masks_button.setObjectName("edit_global_masks")
+        self.edit_global_masks_button.setText("Edit global masks...")
+        hbox.addWidget(self.edit_global_masks_button)
+        self.edit_global_masks_button.clicked.connect(self.edit_global_masks)
 
         settings_layout.addLayout(hbox)
 
         # Add a 'normalize and stitch button'
-        self.stitch_btn = QtGui.QPushButton(self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
+        self.stitch_btn = QtWidgets.QPushButton(self)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Fixed)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.stitch_btn.sizePolicy().hasHeightForWidth())
         self.stitch_btn.setSizePolicy(sp)
         self.stitch_btn.setMinimumSize(QtCore.QSize(250, 0))
-        font = QtGui2.QFont()
+        font = QtGui.QFont()
         font.setBold(True)
-        font.setWeight(75)
+        font.setWeight(QtGui.QFont.Weight.Bold)
         self.stitch_btn.setFont(font)
-        self.stitch_btn.setCursor(QtGui2.QCursor(QtCore.Qt.PointingHandCursor))
+        self.stitch_btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.stitch_btn.setDefault(True)
         self.stitch_btn.setObjectName("stitch_btn")
         self.stitch_btn.setText("Normalize and stitch orders")
 
         settings_layout.addWidget(self.stitch_btn)
 
-        grid_layout = QtGui.QGridLayout()
+        # Add the grid layout for the keyboard shortcuts.
+        grid_layout = QtWidgets.QGridLayout()
         #settings_grid_layout.addLayout(hbox, 7, 1, 1, 1)
         settings_layout.addLayout(grid_layout)
-        self.line = QtGui.QFrame()
-        self.line.setFrameShape(QtGui.QFrame.HLine)
-        self.line.setFrameShadow(QtGui.QFrame.Sunken)
-        #spacer = QtGui.QSpacerItem(QtGui.QSizePolicy.MinimumExpanding, 10)
+        self.line = QtWidgets.QFrame()
+        self.line.setFrameShape(QtWidgets.QFrame.HLine)
+        self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        #spacer = QtWidgets.QSpacerItem(QtWidgets.QSizePolicy.MinimumExpanding, 10)
         #grid_layout.addItem(spacer, 0, 0, 1, 2)
         grid_layout.addWidget(self.line, 0, 0, 1, 2, alignment=QtCore.Qt.AlignBottom)
-        
         buttons = {
                    "Ctrl+Drag": "Zoom",
                    "Click+Drag": "Add mask",
                    "Left/Right": "Change order",
                    "Up/Down": "Scale continuum by 1%",
-                   "a": "Add a point",
+                   "a": "Add an anchor point",
                    "x": "Remove nearest point",
                    "u": "Undo last mask",
                    "w": "Remove nearest mask",
@@ -301,46 +298,59 @@ class NormalizationTab(QtGui.QWidget):
                    "d": "Do not normalize this order",
                    "f": "Refit",
                    }
-        
-        for row,(button,description) in enumerate(buttons.items(),1):
-            label = QtGui.QLabel(self)
+        for row, (button, description) in enumerate(buttons.items(),1):
+            label = QtWidgets.QLabel(self)
             label.setText(button)
             label.setFont(font)
             grid_layout.addWidget(label, row, 0, 1, 1, alignment=QtCore.Qt.AlignCenter) #int fromRow, int fromColumn, int rowSpan, int columnSpan, alignment
-            label = QtGui.QLabel(self)
+            label = QtWidgets.QLabel(self)
             label.setText(description)
             grid_layout.addWidget(label, row, 1, 1, 1) #int fromRow, int fromColumn, int rowSpan, int columnSpan, alignment
 
+        # add another line
+        self.line = QtWidgets.QFrame()
+        self.line.setFrameShape(QtWidgets.QFrame.HLine)
+        self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        settings_layout.addWidget(self.line)
+
+        # Add the clear masks and points button.
+        self.reset_order_masks_button = QtWidgets.QPushButton(self)
+        self.reset_order_masks_button.setObjectName("reset_order_masks")
+        self.reset_order_masks_button.setText("Reset masks and remove anchor points...")
+        self.reset_order_masks_button.clicked.connect(self.reset_order_masks)
+        settings_layout.addWidget(
+            self.reset_order_masks_button, alignment=QtCore.Qt.AlignLeft)
+
         # Add a spacer.
-        settings_layout.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        settings_layout.addItem(QtWidgets.QSpacerItem(
+            40, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
 
         tab_layout.addWidget(settings_widget)
 
         # Create a matplotlib widget.
         self.norm_plot = mpl.MPLWidget(None, tight_layout=True, matchbg=self)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.norm_plot.sizePolicy().hasHeightForWidth())
         self.norm_plot.setSizePolicy(sp)
         self.norm_plot.setFocusPolicy(QtCore.Qt.StrongFocus)
 
-        self.order_slide = QtGui.QSlider(self)
+        self.order_slide = QtWidgets.QSlider(self)
         self.order_slide.setGeometry(QtCore.QRect(230, 200, 160, 22))
         self.order_slide.setOrientation(QtCore.Qt.Horizontal)
         self.order_slide.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.order_slide.setMaximum(15)
         self.order_slide.setOrientation(QtCore.Qt.Horizontal)
         self.order_slide.setTickInterval(1)
-        self.current_order_label = QtGui.QLabel(self)
+        self.current_order_label = QtWidgets.QLabel(self)
         self.current_order_label.setText("")
         self.order_slide.valueChanged.connect(self.update_order_figure)
 
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         vbox.addWidget(self.norm_plot)
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         hbox.addWidget(self.order_slide)
         hbox.addWidget(self.current_order_label)
         vbox.addLayout(hbox)
@@ -427,7 +437,6 @@ class NormalizationTab(QtGui.QWidget):
 
         return None
 
-
     def normalize_and_stitch(self):
         """
         Normalize any remaining orders, and stitch them together.
@@ -456,7 +465,6 @@ class NormalizationTab(QtGui.QWidget):
 
         return None
 
-
     def check_state(self, *args, **kwargs):
         """
         Update the background color of a QLineEdit object based on whether the
@@ -469,14 +477,13 @@ class NormalizationTab(QtGui.QWidget):
         sender = self.sender()
         validator = sender.validator()
         state = validator.validate(sender.text(), 0)[0]
-        if state == QtGui2.QValidator.Acceptable:
+        if state == QtGui.QValidator.Acceptable:
             color = 'none' # normal background color
-        elif state == QtGui2.QValidator.Intermediate:
+        elif state == QtGui.QValidator.Intermediate:
             color = '#fff79a' # yellow
         else:
             color = '#f6989d' # red
         sender.setStyleSheet('QLineEdit { background-color: %s }' % color)
-
 
     def figure_key_press(self, event):
         """
@@ -737,7 +744,7 @@ class NormalizationTab(QtGui.QWidget):
         try:
             self._exclude_selected_region
         except AttributeError:
-            self._exclude_selected_region = self.ax_order.axvspan(**{
+            self._exclude_selected_region = mpl.axvspan_polygon(self.ax_order, **{
                 "xmin": xmin,
                 "xmax": xmax,
                 "ymin": ymin,
@@ -764,8 +771,6 @@ class NormalizationTab(QtGui.QWidget):
                 "motion_notify_event", self.update_exclude_selected_region)
             )
         return None
-
-
 
     def figure_mouse_release(self, event):
         """
@@ -819,7 +824,6 @@ class NormalizationTab(QtGui.QWidget):
         del self._exclude_selected_region_signal
         return None
 
-
     def update_exclude_selected_region(self, event):
         """
         Update the visible selected exclusion region for this order. This
@@ -843,7 +847,6 @@ class NormalizationTab(QtGui.QWidget):
             self.norm_plot.draw()
 
         return None
-
 
     def _populate_widgets(self):
         """
@@ -870,7 +873,7 @@ class NormalizationTab(QtGui.QWidget):
             = self.parent.session.setting(("normalization", "masks"))
         self._cache["default_mask"] \
             = self.parent.session.setting(("normalization", "default_mask")) \
-                or self._cache["masks"].keys()[0]
+                or next(iter(self._cache["masks"]))
 
 
         # Put these values into the widgets.
@@ -909,6 +912,9 @@ class NormalizationTab(QtGui.QWidget):
         for name in self._cache["masks"].keys():
             self.continuum_mask.addItem(name)
 
+        # Initialize the current order before selecting the mask. Setting the
+        # mask index emits currentIndexChanged and refreshes the mask overlay.
+        self.update_order_index(0)
         self.continuum_mask.setCurrentIndex(
             list(self._cache["masks"].keys()).index(
                 self._cache["default_mask"]))
@@ -920,7 +926,6 @@ class NormalizationTab(QtGui.QWidget):
         # Draw the widgets.
         try:
             self.order_slide.setValue(0)
-            self.update_order_index(0)
             self.update_continuum_mask(refresh=False)
             self.fit_continuum(clobber=False)
             self.draw_order(refresh=False)
@@ -932,7 +937,6 @@ class NormalizationTab(QtGui.QWidget):
             # I think this is okay?
             pass
         return None
-
 
     def update_rv_applied(self):
         """
@@ -978,8 +982,6 @@ class NormalizationTab(QtGui.QWidget):
         self.draw_continuum(refresh=True)
 
         return None
-
-
 
     def update_continuum_mask(self, refresh=False, v=0):
         """
@@ -1033,12 +1035,12 @@ class NormalizationTab(QtGui.QWidget):
         except (AttributeError, KeyError):
             dop_shift = 0.0
         # -----------------------------------------------------------------
-        _ =self.parent.session.metadata["normalization"]["normalization_kwargs"]
+        exclude = self._cache["input"].get("exclude", [])
         masked_regions = [
-            #np.array(mask.get("rest_wavelength", [])),
-            np.array(mask.get("rest_wavelength", [])) * (1.0 + dop_shift/c),
+            np.array(mask.get("rest_wavelength", [])),
+            # np.array(mask.get("rest_wavelength", [])) * (1.0 + dop_shift/c), # A. Yelland commented this out for expected behavior in global masks.
             np.array(mask.get("obs_wavelength", [])) * (1.0 + rv_applied/c),
-            np.array(_[self.current_order_index].get("exclude", []))
+            np.array(exclude)
         ]
         if "pixel" in mask:
             masked_regions.append(
@@ -1064,11 +1066,11 @@ class NormalizationTab(QtGui.QWidget):
             if i >= len(self._masked_wavelengths):
                 # Create a polygon in the main axis.
                 self._masked_wavelengths.append(
-                    self.ax_order.axvspan(**kwds))
+                    mpl.axvspan_polygon(self.ax_order, **kwds))
 
                 # And for the normalization axis.
                 self._masked_wavelengths_norm.append(
-                    self.ax_order_norm.axvspan(**kwds))
+                    mpl.axvspan_polygon(self.ax_order_norm, **kwds))
 
             polygons = (
                 self._masked_wavelengths[i],
@@ -1091,7 +1093,123 @@ class NormalizationTab(QtGui.QWidget):
             self.norm_plot.draw()
         return True
 
+    # -----------------------------------------------------------------
+    # A. Yellnd added these functions
+    def reset_order_masks(self):
+        """
+        Remove all manually-added mask regions and continuum anchor points
+        for the currently displayed order, then re-apply the blue/red trim,
+        knot spacing, sigma clips, function, order, and maximum iterations
+        using whatever values are currently shown in their widgets.
+        """
+        session = self.parent.session
+        if session is None:
+            return None
 
+        index = self.current_order_index
+
+        # Confirmation prompt before clearing.
+        # response = QtWidgets.QMessageBox.question(
+        #     self, "Reset masks",
+        #     "This will remove all manually-added mask regions and continuum "
+        #     "points for the currently displayed order, and re-apply the "
+        #     "trim, knot spacing, sigma clip, function, order, and maximum "
+        #     "iteration settings from their current field values. Continue?",
+        #     QtWidgets.QMessageBox.StandardButton.Yes
+        #         | QtWidgets.QMessageBox.StandardButton.No)
+        # if response != QtWidgets.QMessageBox.StandardButton.Yes:
+        #     return None
+
+        normalization_kwargs \
+            = session.metadata["normalization"]["normalization_kwargs"]
+
+        # Remove all manually-added masks and continuum anchor points for this order
+        for key in ("exclude", "additional_points"):
+            normalization_kwargs[index].pop(key, None)
+            self._cache["input"].pop(key, None)
+
+        # Re-apply the normalization settings from their current widget values
+        self.update_blue_trim()
+        self.update_red_trim()
+        self.update_normalization_function(refresh=False)
+        self.update_normalization_order()
+        self.update_normalization_max_iterations()
+        self.update_low_sigma_clip()
+        self.update_high_sigma_clip()
+        self.update_knot_spacing()
+
+        # Refresh the mask overlay itself, after the above updates have been applied
+        self.update_continuum_mask(refresh=True)
+
+        return None
+
+    def update_global_mask_selection(self):
+        """
+        Refit and redraw every order's continuum when the user picks a
+        different global mask profile from the combo box.
+        """
+        session = self.parent.session
+        # Adding the initial mask entries can emit currentIndexChanged before
+        # the current order has been initialized.
+        if session is None or not hasattr(self, "current_order_index"):
+            return None
+
+        N = len(session.input_spectra)
+        session.metadata["normalization"]["continuum"] = [None] * N
+
+        self.update_continuum_mask(refresh=False)
+        self.fit_continuum(clobber=True)
+        self.draw_continuum(refresh=True)
+        return None
+
+    def edit_global_masks(self):
+        """
+        Open a dialog to create or edit the named global continuum mask
+        profiles (self._cache["masks"]), used by every order's continuum
+        fit (fit_continuum) and drawn by update_continuum_mask.
+        """
+        session = self.parent.session
+        if session is None:
+            return None
+
+        dialog = global_masks_manager.GlobalMaskEditorDialog(
+            self._cache["masks"], self.continuum_mask.currentText(), self)
+        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return None
+
+        new_masks = dialog.result_masks()
+        new_default_name = dialog.result_default_mask_name()
+        save_to_disk = dialog.result_save_to_disk()
+
+        previous_selection = self.continuum_mask.currentText()
+        self._cache["masks"] = new_masks
+
+        self.continuum_mask.blockSignals(True)
+        self.continuum_mask.clear()
+        self.continuum_mask.addItems(list(new_masks.keys()))
+        select_name = previous_selection if previous_selection in new_masks \
+            else next(iter(new_masks))
+        self.continuum_mask.setCurrentIndex(self.continuum_mask.findText(select_name))
+        self.continuum_mask.blockSignals(False)
+
+        if new_default_name is not None:
+            self._cache["default_mask"] = new_default_name
+
+        if save_to_disk:
+            session.update_default_setting(("normalization", "masks"), new_masks)
+            if new_default_name is not None:
+                session.update_default_setting(
+                    ("normalization", "default_mask"), new_default_name)
+
+        # The global mask changed, so every order's stored continuum is stale.
+        N = len(session.input_spectra)
+        session.metadata["normalization"]["continuum"] = [None] * N
+
+        self.update_continuum_mask(refresh=False)
+        self.fit_continuum(clobber=True)
+        self.draw_continuum(refresh=True)
+        return None
+    # -----------------------------------------------------------------
 
     def update_knot_spacing(self):
         """ Update the knot spacing. """
@@ -1208,7 +1326,6 @@ class NormalizationTab(QtGui.QWidget):
             self.draw_continuum(True)
         return None
 
-
     def update_low_sigma_clip(self):
         """ Update the low sigma clip value. """
         low_sigma = self.low_sigma_clip.text()
@@ -1221,7 +1338,6 @@ class NormalizationTab(QtGui.QWidget):
             self.fit_continuum(True)
             self.draw_continuum(True)
         return None
-
 
     def update_normalization_function(self, refresh=True):
         """ Update the normalization function. """
@@ -1255,7 +1371,6 @@ class NormalizationTab(QtGui.QWidget):
             self.draw_continuum(True)
         return None
 
-
     def update_normalization_order(self):
         """ Update the normalization order. """
         self._cache["input"]["order"] = int(self.order.currentText())
@@ -1263,7 +1378,6 @@ class NormalizationTab(QtGui.QWidget):
         self.fit_continuum(True)
         self.draw_continuum(True)
         return None
-
 
     def update_normalization_max_iterations(self):
         """ Update the maximum number of iterations. """
@@ -1273,7 +1387,6 @@ class NormalizationTab(QtGui.QWidget):
         self.draw_continuum(True)
         self.reset_input_style_defaults()
         return None
-
 
     def update_order_index(self, index=None):
         """
@@ -1302,8 +1415,6 @@ class NormalizationTab(QtGui.QWidget):
         
         return None
 
-
-
     def update_order_figure(self, index=None):
 
         #offset = 1 if event.key == "right" else -1
@@ -1324,16 +1435,6 @@ class NormalizationTab(QtGui.QWidget):
             self.stitch_btn.setText("Stitch orders")
 
         return None 
-
-
-
-
-
-
-
-
-
-
 
     def check_for_different_input_settings(self):
         """
@@ -1428,7 +1529,6 @@ class NormalizationTab(QtGui.QWidget):
             
         return None
 
-
     def reset_input_style_defaults(self, items=None):
         """
         Reset the styling inputs.
@@ -1450,7 +1550,6 @@ class NormalizationTab(QtGui.QWidget):
             item.setStatusTip("")
         self.parent.statusbar.showMessage(self.parent._default_statusbar_message)
         return None
-
 
     def draw_order(self, refresh=False):
         """
@@ -1481,7 +1580,6 @@ class NormalizationTab(QtGui.QWidget):
             self.norm_plot.draw()
         return None
 
-
     def fit_continuum(self, clobber, sender=None):
         """
         Update continuum for the current order.
@@ -1507,7 +1605,8 @@ class NormalizationTab(QtGui.QWidget):
         #print("gui.normalization.fit_continuum: fitting {}".format(index))
 
         kwds = self._cache["input"].copy()
-        kwds["full_output"] = True
+        fit_kwds = kwds.copy()
+        fit_kwds["full_output"] = True
 
         # Add in the global continuum masks.
         global_mask = self._cache["masks"][self.continuum_mask.currentText()]
@@ -1551,17 +1650,17 @@ class NormalizationTab(QtGui.QWidget):
             regions.extend(1e-3 + \
                 self.current_order.dispersion[np.array(global_mask["pixel"])])
 
-        if kwds.get("exclude", None) is None:
-            kwds["exclude"] = np.array(regions)
+        if fit_kwds.get("exclude", None) is None:
+            fit_kwds["exclude"] = np.array(regions)
 
         else:
-            _ = np.array(kwds["exclude"])
+            _ = np.array(fit_kwds["exclude"])
             _.shape = (-1, 2)
-            kwds["exclude"] = np.vstack((_, np.array(regions).reshape(-1, 2)))
+            fit_kwds["exclude"] = np.vstack((_, np.array(regions).reshape(-1, 2)))
 
         try:
             normalized_spectrum, continuum, left, right \
-                = self.current_order.fit_continuum(**kwds)
+                = self.current_order.fit_continuum(**fit_kwds)
             #if kwds["knot_spacing"] == 201:
             #    raise KeyError("what") #HACK #TESTING #TODO
         except:
@@ -1581,7 +1680,6 @@ class NormalizationTab(QtGui.QWidget):
         session.metadata["normalization"]["normalization_kwargs"][index] = kwds
 
         return None
-
 
     def draw_continuum(self, refresh=False):
         """
@@ -1607,8 +1705,6 @@ class NormalizationTab(QtGui.QWidget):
             self.current_order.dispersion, continuum])
 
         # Set the color of the line.
-        #self.ax_order.lines[1].set_color(wavelength_to_hex(
-        #    np.nanmean(self.current_order.dispersion)))
         self.ax_order.lines[1].set_color("r")
         
         # Add points showing knot locations
@@ -1636,4 +1732,3 @@ class NormalizationTab(QtGui.QWidget):
         if refresh:
             self.norm_plot.draw()
         return None
-

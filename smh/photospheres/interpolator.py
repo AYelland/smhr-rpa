@@ -10,8 +10,8 @@ __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 # Standard library.
 import os
 import logging
-from six.moves import cPickle as pickle
-from pkg_resources import resource_stream
+import pickle
+from importlib.resources import files
 
 # Third-party.
 import astropy.table
@@ -53,11 +53,11 @@ class BaseInterpolator(object):
 
         else:
             try:
-                with resource_stream(__name__, pickled_photospheres) as fp:
+                with (files(__name__) / pickled_photospheres).open("rb") as fp:
                     _ = pickle.load(fp, encoding="latin1")
             except:
-                raise ValueError("photosphere filename '{}' does not exist"\
-                    .format(pickled_photospheres))
+                raise ValueError("photosphere filename '{}' does not exist"
+                                 .format(pickled_photospheres))
 
         stellar_parameters, photospheres, photospheric_quantities, meta = _
 
@@ -83,7 +83,7 @@ class BaseInterpolator(object):
         self.method = method
         self.rescale = rescale
         if self.rescale and not has_scipy_requirements:
-            logger.warn(
+            logger.warning(
                 "scipy >= 0.14.0 is required for auto-rescaling points "
                 "before interpolation")
             self.rescale = False
@@ -134,7 +134,7 @@ class BaseInterpolator(object):
 
 
     def nearest(self, *point):
-        logger.warn("Living dangerously!")
+        logger.warning("Living dangerously!")
         return self._return_photosphere(point, 
             self.photospheres[self.nearest_neighbours(point, 1)[0]])
 
@@ -223,7 +223,7 @@ class BaseInterpolator(object):
             try:
                 index = self.photospheric_quantities.index(quantity)
             except ValueError:
-                logger.warn("Could not find logarithmic photospheric quantity "\
+                logger.warning("Could not find logarithmic photospheric quantity "\
                     "'{}'".format(quantity))
                 continue
             else:

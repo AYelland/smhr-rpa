@@ -5,10 +5,10 @@ from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
 import sys
 import os
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
+from PySide6 import QtCore, QtGui, QtWidgets
 import time
-from six import iteritems
 import numpy as np
+import traceback
 
 import matplotlib
 from matplotlib.ticker import MaxNLocator, MultipleLocator
@@ -29,11 +29,11 @@ if sys.platform == "darwin":
         (".Helvetica Neue DeskInterface", "Helvetica Neue")
     ]
     for substitute in substitutes:
-        QtGui2.QFont.insertSubstitution(*substitute)
+        QtGui.QFont.insertSubstitution(*substitute)
 
 DOUBLE_CLICK_INTERVAL = 0.1 # MAGIC HACK
 PICKER_TOLERANCE = 10 # MAGIC HACK
-_QFONT = QtGui2.QFont("Helvetica Neue", 10)
+_QFONT = QtGui.QFont("Helvetica Neue", 10)
 _ROWHEIGHT = 20
 
 ## These are valid attrs of a spectral model
@@ -44,10 +44,10 @@ _allattrs = ["wavelength","expot","species","elements","loggf",
              "is_acceptable", "is_upper_limit", "user_flag",
              "use_for_stellar_parameter_inference", "use_for_stellar_composition_inference",
              "measurement_type","fwhm"]
-_labels = ["Wavelength $\lambda$",u"Excitation potential","Species","Element","log gf",
+_labels = [r"Wavelength $\lambda$",u"Excitation potential","Species","Element","log gf",
            "Equivalent width", "Equivalent width error",
            r"$\log{EW}/\lambda$",
-           u"log ε","[X/H]", u"σ(log ε)",
+           r"$\log\varepsilon$",r"$\rm{[X/H]}$", r"$\sigma(\log\varepsilon)$",
            "Acceptable", "Upper Limit", "User Flag",
            "Use for Spectroscopic Stellar Parameters", "Use for Stellar Abundances",
            "Measurement Type", "FWHM"]
@@ -133,15 +133,15 @@ class SMHSpecDisplay(mpl.MPLWidget):
         self.comparison_spectrum = comparison_spectrum
 
         self.setMinimumSize(QtCore.QSize(100,100))
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
         gs = matplotlib.gridspec.GridSpec(2, 1, height_ratios=[1,2])
-        gs.update(top=.95, bottom=.05, hspace=0)
+        gs.update(top=.95, bottom=.12, hspace=0)
 
         self.ax_residual = self.figure.add_subplot(gs[0])
         self.ax_residual.axhline(0, c="#666666")
@@ -155,9 +155,9 @@ class SMHSpecDisplay(mpl.MPLWidget):
         self.ax_spectrum.axhline(1, c='k', ls=':')
         #self.ax_spectrum.xaxis.get_major_formatter().set_useOffset(False)
         #self.ax_spectrum.xaxis.set_major_locator(MaxNLocator(5))
-        self.ax_spectrum.set_xlabel(u"Wavelength (Å)")
+        self.ax_spectrum.set_xlabel(r"Wavelength ($\AA$)")
         self.ax_spectrum.set_ylabel(r"Normalized flux")
-        self.ax_spectrum.set_ylim(0, 1.2)
+        self.ax_spectrum.set_ylim(0, 1.24)
         self.ax_spectrum.yaxis.set_major_locator(MultipleLocator(0.2))
         self.ax_spectrum.yaxis.set_minor_locator(MultipleLocator(0.02))
         #self.ax_spectrum.set_yticks([0, 0.5, 1])
@@ -200,12 +200,16 @@ class SMHSpecDisplay(mpl.MPLWidget):
             "model_residual": self.ax_residual.plot(
                 [np.nan], [np.nan], c="k", drawstyle="steps-mid")[0],
             "interactive_mask": [
-                self.ax_spectrum.axvspan(xmin=np.nan, xmax=np.nan, ymin=np.nan,
-                                         ymax=np.nan, facecolor="r", edgecolor="none", alpha=0.25,
-                                         zorder=-5),
-                self.ax_residual.axvspan(xmin=np.nan, xmax=np.nan, ymin=np.nan,
-                                         ymax=np.nan, facecolor="r", edgecolor="none", alpha=0.25,
-                                         zorder=-5)
+                mpl.axvspan_polygon(self.ax_spectrum, 
+                    xmin=np.nan, xmax=np.nan,
+                    facecolor="r", edgecolor="none", alpha=0.25,
+                    zorder=-5
+                ),
+                mpl.axvspan_polygon(self.ax_residual, 
+                    xmin=np.nan, xmax=np.nan,
+                    facecolor="r", edgecolor="none", alpha=0.25,
+                    zorder=-5
+                )
             ]
         }
         self.reset()
@@ -357,8 +361,10 @@ class SMHSpecDisplay(mpl.MPLWidget):
         key = event.key.lower()
         if event.key == "a":
             selected_model.is_acceptable = True
-        elif event.key == "u":
+        elif event.key == "r":
             selected_model.is_acceptable = False
+        elif event.key == "u":
+            selected_model.is_upper_limit = not selected_model.is_upper_limit
         elif event.key == "f":
             selected_model.user_flag = (~selected_model.user_flag)
         return None
@@ -366,8 +372,10 @@ class SMHSpecDisplay(mpl.MPLWidget):
     def key_press_zoom(self, event):
         if event.key not in "1234": return None
         if self.session is None: return None
-        ylim = self.session.setting(["zoom_shortcuts",int(event.key)],
-                                    default_return_value=[0.0,1.2])
+        ylim = self.session.setting(
+            ["zoom_shortcuts", int(event.key)],
+            default_return_value=[0.0,1.2]
+        )
         self.ax_spectrum.set_ylim(ylim)
         self.draw()
         return None
@@ -595,9 +603,11 @@ class SMHSpecDisplay(mpl.MPLWidget):
 
             except IndexError:
                 self._lines["model_masks"].append([
-                    self.ax_spectrum.axvspan(np.nan, np.nan,
+                    mpl.axvspan_polygon(self.ax_spectrum, 
+                        xmin=np.nan, xmax=np.nan,
                         facecolor=mask_color, edgecolor="none", alpha=0.25),
-                    self.ax_residual.axvspan(np.nan, np.nan,
+                    mpl.axvspan_polygon(self.ax_residual, 
+                        xmin=np.nan, xmax=np.nan, 
                         facecolor=mask_color, edgecolor="none", alpha=0.25)
                 ])
                 patches = self._lines["model_masks"][-1]
@@ -632,8 +642,12 @@ class SMHSpecDisplay(mpl.MPLWidget):
             pass
         
         selected_model = self.selected_model
-        try: none_x,none_y = selected_model.metadata["zero_abundance"]
-        except: none_x = none_y = np.nan
+        try:
+            none_x, none_y = selected_model.metadata["zero_abundance"]
+        except:
+            none_x = none_y = np.nan
+        none_x = np.atleast_1d(none_x)
+        none_y = np.atleast_1d(none_y)
 
         try:
             (named_p_opt, cov, meta) = selected_model.metadata["fitted_result"]
@@ -682,9 +696,11 @@ class SMHSpecDisplay(mpl.MPLWidget):
                 
                     except IndexError:
                         self._lines["nearby_lines"].append([
-                            self.ax_spectrum.axvspan(np.nan, np.nan,
+                            mpl.axvspan_polygon(self.ax_spectrum, 
+                                xmin=np.nan, xmax=np.nan,
                                 facecolor=self.unacceptable_color, edgecolor="none", alpha=0.25),
-                            self.ax_residual.axvspan(np.nan, np.nan,
+                            mpl.axvspan_polygon(self.ax_residual, 
+                                xmin=np.nan, xmax=np.nan,
                                 facecolor=self.unacceptable_color, edgecolor="none", alpha=0.25)
                         ])
                         patches = self._lines["nearby_lines"][-1]
@@ -741,20 +757,26 @@ class SMHScatterplot(mpl.MPLWidget):
     allattrs = _allattrs
     labels = _labels
     attr2label = _attr2label
-    def __init__(self, parent, xattr, yattr,
-                 tableview=None,
-                 enable_zoom=True, enable_pick=True,
-                 enable_keyboard_shortcuts=True,
-                 do_not_select_unacceptable=False,
-                 ## These are settings for multiple things
-                 exattr=None, eyattr=None,
-                 filters=[lambda x: True],
-                 point_styles=[{"s":30,"facecolor":"k","edgecolor":"k","alpha":0.5}],
-                 error_styles=None,
-                 linefit_styles=None,
-                 linemean_styles=None,
-                 sigma=2.5,
-                 **kwargs):
+    def __init__(
+            self, 
+            parent, 
+            xattr, 
+            yattr,
+            tableview=None,
+            enable_zoom=True, 
+            enable_pick=True,
+            enable_keyboard_shortcuts=True,
+            do_not_select_unacceptable=False,
+            ## These are settings for multiple things
+            exattr=None, 
+            eyattr=None,
+            filters=[lambda x: True],
+            point_styles=[{"s":30,"facecolor":"k","edgecolor":"k","alpha":0.5}],
+            error_styles=None,
+            linefit_styles=None,
+            linemean_styles=None,
+            sigma=2.5,
+            **kwargs):
         assert xattr in self.allattrs, xattr
         assert yattr in self.allattrs, yattr
         self.xattr = xattr
@@ -776,8 +798,7 @@ class SMHScatterplot(mpl.MPLWidget):
             self.eyattr = None
         self.sigma = sigma
         
-        super(SMHScatterplot, self).__init__(parent=parent,
-                                             **kwargs)
+        super(SMHScatterplot, self).__init__(parent=parent, **kwargs)
         
         self.parent = parent
         self.linkToTable(tableview)
@@ -818,8 +839,7 @@ class SMHScatterplot(mpl.MPLWidget):
             if point_kw is None: point_objs.append(None)
             else:
                 point_objs.append(
-                    self.ax.scatter([], [], picker=PICKER_TOLERANCE,
-                                    **point_kw))
+                    self.ax.scatter([], [], picker=PICKER_TOLERANCE, **point_kw))
             
             if error_kw is None: error_objs.append(None)
             else:
@@ -862,7 +882,7 @@ class SMHScatterplot(mpl.MPLWidget):
         if enable_zoom:
             self.enable_interactive_zoom()
         if enable_pick:
-            self.canvas.callbacks.connect("pick_event", self.figure_mouse_pick)
+            self.mpl_connect("pick_event", self.figure_mouse_pick)
         if enable_keyboard_shortcuts:
             self.mpl_connect("key_press_event", self.key_press_event)
         self.do_not_select_unacceptable = do_not_select_unacceptable
@@ -938,6 +958,7 @@ class SMHScatterplot(mpl.MPLWidget):
         #logger.debug("{}->{}, {}->{}".format(self.xattr, self.xcol, self.yattr, self.ycol))
         #if (self.exattr is not None) or (self.eyattr is not None):
         #    logger.debug("Err col: {}->{}, {}->{}".format(self.exattr, self.excol, self.eyattr, self.eycol))
+        
     def _load_value_from_table(self, index):
         val = self.tablemodel.data(index, QtCore.Qt.DisplayRole)
         try:
@@ -946,6 +967,7 @@ class SMHScatterplot(mpl.MPLWidget):
             if val != "": logger.debug(e)
             val = np.nan
         return val
+        
     def _get_spectral_models_from_rows(self, rows):
         ### TODO
         try:
@@ -953,6 +975,7 @@ class SMHScatterplot(mpl.MPLWidget):
             return spectral_models
         except:
             return None
+            
     def update_scatterplot(self, redraw=False):
         if self.tableview is None or self.tablemodel is None: return None
         xs, ys, exs, eys = [], [], [], []
@@ -1058,6 +1081,7 @@ class SMHScatterplot(mpl.MPLWidget):
         if redraw: 
             self.draw()
         return None
+    
     def update_selected_points(self, redraw=False):
         if self.tableview is None or self.tablemodel is None: return None
         #logger.debug("update_selected_points ({}, {})".format(self, redraw))
@@ -1086,13 +1110,16 @@ class SMHScatterplot(mpl.MPLWidget):
         return self.tablemodel.createIndex(row,col)
 
     def figure_mouse_pick(self, event):
+        print("PICK FIRED", event.ind, event.mouseevent.x, event.mouseevent.y)
         if event.mouseevent.button != 1: return None
         ## this is fast but broken when multiple points are on the scatterplot.
         #self.tableview.selectRow(event.ind[0])
         xscale = np.ptp(self.ax.get_xlim())
         yscale = np.ptp(self.ax.get_ylim())
-        xall = self.tablemodel.get_data_column(self.xcol)
-        yall = self.tablemodel.get_data_column(self.ycol)
+        # xall = self.tablemodel.get_data_column(self.xcol)
+        # yall = self.tablemodel.get_data_column(self.ycol)
+        xall = self.tablemodel.get_data_column(self.xattr)
+        yall = self.tablemodel.get_data_column(self.yattr)
         xpick = event.mouseevent.xdata
         ypick = event.mouseevent.ydata
         dist = np.sqrt((xall-xpick)**2 + (yall-ypick)**2)
@@ -1100,14 +1127,23 @@ class SMHScatterplot(mpl.MPLWidget):
         #logger.debug("picked row {} with {} {}".format(ix, xpick, ypick))
         self.tableview.selectRow(ix)
         return None
-    
+            
     def key_press_event(self, event):
-        if event.key not in "uUaA": return None
-        if self.tableview is None or self.tablemodel is None: return None
-        if event.key in "uU":
+        if event.key not in {
+            "a", "A", "r", "R", "u", "U", "f", "F", "left", "right"
+        }:
+            return None
+        if self.tableview is None or self.tablemodel is None:
+            return None
+        if event.key in {"r", "R", "left"}:
             self.mark_selected_models_as_unacceptable()
-        elif event.key in "aA":
+        elif event.key in {"a", "A", "right"}:
             self.mark_selected_models_as_acceptable()
+        elif event.key in {"u", "U"}:
+            self.mark_selected_models_as_upper_limit()
+        elif event.key in {"f", "F"}:
+            self.mark_selected_models_as_flagged()
+
     def mark_selected_models_as_unacceptable(self):
         col = self.tablemodel.attrs.index("is_acceptable")
         rows = self.tableview.selectionModel().selectedRows()
@@ -1116,6 +1152,7 @@ class SMHScatterplot(mpl.MPLWidget):
             ix = self._ix(i, col)
             self.tablemodel.setData(ix, False)
             self.tableview.update_row(i)
+    
     def mark_selected_models_as_acceptable(self):
         col = self.tablemodel.attrs.index("is_acceptable")
         rows = self.tableview.selectionModel().selectedRows()
@@ -1124,22 +1161,49 @@ class SMHScatterplot(mpl.MPLWidget):
             ix = self._ix(i, col)
             self.tablemodel.setData(ix, True)
             self.tableview.update_row(i)
+
+    def mark_selected_models_as_upper_limit(self):
+        col = self.tablemodel.attrs.index("is_upper_limit")
+        rows = self.tableview.selectionModel().selectedRows()
+        for row in rows:
+            i = row.row()
+            ix = self._ix(i, col)
+            current_upper_limit = (
+                self.tablemodel.data(ix, QtCore.Qt.CheckStateRole)
+                == QtCore.Qt.Checked
+            )
+            self.tablemodel.setData(ix, not current_upper_limit)
+            self.tableview.update_row(i)
+
+    def mark_selected_models_as_flagged(self):
+        col = self.tablemodel.attrs.index("user_flag")
+        rows = self.tableview.selectionModel().selectedRows()
+        for row in rows:
+            i = row.row()
+            ix = self._ix(i, col)
+            current_flag = (
+                self.tablemodel.data(ix, QtCore.Qt.CheckStateRole)
+                == QtCore.Qt.Checked
+            )
+            self.tablemodel.setData(ix, not current_flag)
+            self.tableview.update_row(i)
     
-class BaseTableView(QtGui.QTableView):
+class BaseTableView(QtWidgets.QTableView):
     """ Basic sizing and options for display table """
     def __init__(self, parent, *args):
         super(BaseTableView, self).__init__(parent, *args)
         self.parent = parent
         self.setSortingEnabled(False)
         self.verticalHeader().setDefaultSectionSize(_ROWHEIGHT)
-        self.horizontalHeader().setStretchLastSection(True)
-        self.horizontalHeader().setSectionResizeMode(QtGui.QHeaderView.Stretch)
-        self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+        # self.horizontalHeader().setStretchLastSection(True)
+        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         
     def sizeHint(self):
         return QtCore.QSize(125,100)
     def minimumSizeHint(self):
         return QtCore.QSize(125,100)
+
 class MeasurementTableView(BaseTableView):
     def __init__(self, parent, session,
                  callbacks_after_menu=[], display_fitting_options=True):
@@ -1147,6 +1211,13 @@ class MeasurementTableView(BaseTableView):
         self.session = session
         self.callbacks_after_menu = callbacks_after_menu
         self.display_fitting_options = display_fitting_options
+
+    def setModel(self, model):
+        super(MeasurementTableView, self).setModel(model)
+        header = self.horizontalHeader()
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
+        header.resizeSection(0, 30)
+
     def update_session(self, session):
         self.session = session
         self.model().reindex()
@@ -1167,7 +1238,7 @@ class MeasurementTableView(BaseTableView):
         N = len(rows)
         
         ### Create rightclick menu
-        menu = QtGui.QMenu(self)
+        menu = QtWidgets.QMenu(self)
         fit_selected_models = menu.addAction(
             "Fit selected model{}..".format(["", "s"][N != 1]))
         measure_selected_models = menu.addAction(
@@ -1224,7 +1295,7 @@ class MeasurementTableView(BaseTableView):
         if N == 0:
             menu.setEnabled(False)
             
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec(self.mapToGlobal(event.pos()))
     
         if action == fit_selected_models:
             self.fit_selected_models()
@@ -1309,25 +1380,32 @@ class MeasurementTableView(BaseTableView):
             index = data_model.createIndex(row, col)
             data_model.setData(index, value)
         return None
-    
-    # E. Holmbeck added extra keypress for convenience.
-    # Press the leftarrow to deselect and right arrow to select a line
+
+    def toggle_flag(self, flag_field):
+        assert flag_field in ["is_upper_limit", "user_flag"], flag_field
+        rows, spectral_models = self.get_selected_models(getrows=True)
+        data_model = self.model()
+        col = data_model.attrs.index(flag_field)
+        for row, spectral_model in zip(rows, spectral_models):
+            index = data_model.createIndex(row, col)
+            data_model.setData(index, not getattr(spectral_model, flag_field))
+            self.update_row(row)
+        return None
+
+    # Table-view keybinding shortcuts (consistent with SMHScatterplot).
     def keyPressEvent (self, eventQKeyEvent):
         key = eventQKeyEvent.key()
-        if key == QtCore.Qt.Key_Left:
+        if key in (QtCore.Qt.Key_Left, QtCore.Qt.Key_R):
             self.set_flag("is_acceptable", False)
-        elif key == QtCore.Qt.Key_Right:
+        elif key in (QtCore.Qt.Key_Right, QtCore.Qt.Key_A):
             self.set_flag("is_acceptable", True)
         elif key == QtCore.Qt.Key_F:
-            spectral_model = self.get_selected_models(getrows=False)[0]
-            self.set_flag("user_flag", np.logical_not(spectral_model.user_flag))
+            self.toggle_flag("user_flag")
         elif key == QtCore.Qt.Key_U:
-            spectral_model = self.get_selected_models(getrows=False)[0]
-            self.set_flag("is_upper_limit", np.logical_not(spectral_model.is_upper_limit))
+            self.toggle_flag("is_upper_limit")
         else:
             super(MeasurementTableView, self).keyPressEvent(eventQKeyEvent)
     
-      
     def set_fitting_option_value(self, key, value,
                                  valid_for_profile=False,
                                  valid_for_synth=False):
@@ -1390,7 +1468,7 @@ class MeasurementTableView(BaseTableView):
                 key, value, num_fit, len(spectral_models), num_profile_models, num_synthesis_models, num_unacceptable, num_error))
         return None
     def set_fitting_window(self):
-        window, is_ok = QtGui.QInputDialog.getDouble(
+        window, is_ok = QtWidgets.QInputDialog.getDouble(
             None, "Set fitting window", u"Fitting window (Å):", 
             value=5, minValue=0.1, maxValue=1000)
         if not is_ok: return None
@@ -1418,7 +1496,7 @@ class MeasurementTableView(BaseTableView):
                                       valid_for_synth=False)
         return None
     def set_detection_sigma(self):
-        detection_sigma, is_ok = QtGui.QInputDialog.getDouble(
+        detection_sigma, is_ok = QtWidgets.QInputDialog.getDouble(
             None, "Set detection sigma", u"Detection sigma:", 
             value=0.5, minValue=0.1, maxValue=1000)
         if not is_ok: return None
@@ -1426,7 +1504,7 @@ class MeasurementTableView(BaseTableView):
                                       valid_for_profile=True,
                                       valid_for_synth=False)
     def set_detection_pixels(self):
-        detection_pixels, is_ok = QtGui.QInputDialog.getInt(
+        detection_pixels, is_ok = QtWidgets.QInputDialog.getInt(
             None, "Set detection pixel", u"Detection pixels:", 
             value=3, minValue=1, maxValue=1000)
         if not is_ok: return None
@@ -1434,7 +1512,7 @@ class MeasurementTableView(BaseTableView):
                                       valid_for_profile=True,
                                       valid_for_synth=False)
     def set_rv_tolerance(self):
-        velocity_tolerance, is_ok = QtGui.QInputDialog.getDouble(
+        velocity_tolerance, is_ok = QtWidgets.QInputDialog.getDouble(
             None, "Set velocity tolerance", u"Velocity tolerance:", 
             value=5, minValue=0.01, maxValue=100)
         if not is_ok: return None
@@ -1443,7 +1521,7 @@ class MeasurementTableView(BaseTableView):
                                       valid_for_profile=True,
                                       valid_for_synth=True)
     def set_wl_tolerance(self):
-        wavelength_tolerance, is_ok = QtGui.QInputDialog.getDouble(
+        wavelength_tolerance, is_ok = QtWidgets.QInputDialog.getDouble(
             None, "Set wavelength tolerance", u"Wavelength tolerance:", 
             value=0.1, minValue=0.01, maxValue=1)
         if not is_ok: return None
@@ -1456,19 +1534,19 @@ def create_measurement_table_with_buttons(parent, filtermodel, session, **kwargs
     """
     kwargs go to MeasurementTableView (esp. callbacks_after_menu, display_fitting_options)
     """
-    vbox = QtGui.QVBoxLayout()
+    vbox = QtWidgets.QVBoxLayout()
     tableview = MeasurementTableView(parent, session, **kwargs)
     tableview.setModel(filtermodel)
     vbox.addWidget(tableview)
     
-    hbox = QtGui.QHBoxLayout()
+    hbox = QtWidgets.QHBoxLayout()
 
-    btn_filter = QtGui.QPushButton(parent)
+    btn_filter = QtWidgets.QPushButton(parent)
     btn_filter.setText("Hide unacceptable")
     show_or_hide_unacceptable = lambda: filtermodel.show_or_hide_unacceptable(btn_filter)
     btn_filter.clicked.connect(show_or_hide_unacceptable)
     
-    btn_refresh = QtGui.QPushButton(parent)
+    btn_refresh = QtWidgets.QPushButton(parent)
     btn_refresh.setText("Refresh")
 
     hbox.addWidget(btn_filter)
@@ -1477,7 +1555,7 @@ def create_measurement_table_with_buttons(parent, filtermodel, session, **kwargs
     vbox.addLayout(hbox)
     return vbox, tableview, btn_filter, btn_refresh
     
-class MeasurementTableDelegate(QtGui.QItemDelegate):
+class MeasurementTableDelegate(QtWidgets.QItemDelegate):
     ## TODO this doesn't work
     ## It doesn't paint checkboxes or get the font right anymore
     COLOR = "#FFFF00" #yellow
@@ -1486,9 +1564,9 @@ class MeasurementTableDelegate(QtGui.QItemDelegate):
         self.view = view
     def paint(self, painter, option, index):
         painter.save()
-        painter.setPen(QtGui2.QPen(QtCore.Qt.NoPen))
-        if option.state & QtGui.QStyle.State_Selected:
-            painter.setBrush(QtGui2.QBrush(
+        painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+        if option.state & QtWidgets.QStyle.State_Selected:
+            painter.setBrush(QtGui.QBrush(
                 self.parent().palette().highlight().color()))
         else:
             model = self.view.model()
@@ -1497,16 +1575,15 @@ class MeasurementTableDelegate(QtGui.QItemDelegate):
                 col = model.attrs.index("user_flag")
                 state = model.data(model.createIndex(row,col))
                 if state == QtCore.Qt.Checked:
-                    painter.setBrush(QtGui2.QBrush(QtGui2.QColor(self.COLOR)))
+                    painter.setBrush(QtGui.QBrush(QtGui.QColor(self.COLOR)))
                 else:
-                    painter.setBrush(QtGui2.QBrush(QtCore.Qt.white))
+                    painter.setBrush(QtGui.QBrush(QtCore.Qt.white))
             else:
-                painter.setBrush(QtGui2.QBrush(QtCore.Qt.white))
+                painter.setBrush(QtGui.QBrush(QtCore.Qt.white))
         painter.drawRect(option.rect)
-        painter.setPen(QtGui2.QPen(QtCore.Qt.black))
+        painter.setPen(QtGui.QPen(QtCore.Qt.black))
         painter.drawText(option.rect, QtCore.Qt.AlignLeft|QtCore.Qt.AlignCenter, index.data())
         painter.restore()
-        
 
 class MeasurementTableModelProxy(QtCore.QSortFilterProxyModel):
     """
@@ -1528,6 +1605,16 @@ class MeasurementTableModelProxy(QtCore.QSortFilterProxyModel):
             return self.sourceModel().attrs
         except:
             return []
+        
+    # def beginResetModel(self):
+    #     print(f"--- PROXY beginResetModel ({id(self):#x})")
+    #     traceback.print_stack(limit=8)
+    #     super().beginResetModel()
+    # def endResetModel(self):
+    #     print(f"--- PROXY endResetModel ({id(self):#x})")
+    #     traceback.print_stack(limit=8)
+    #     super().endResetModel()
+
     def show_or_hide_unacceptable(self, btn):
         hide = btn.text().startswith("Hide")
         if hide:
@@ -1624,7 +1711,6 @@ class MeasurementTableModelProxy(QtCore.QSortFilterProxyModel):
         else:
             # No problems.
             return True
-
         # We broke out of the for loop.
         return False
     def mapFromSource(self, data_index):
@@ -1728,10 +1814,13 @@ class MeasurementTableModelBase(QtCore.QAbstractTableModel):
         if value is None: return ""
         
         ## Deal with checkboxies
-        if attr in ["is_acceptable","is_upper_limit","user_flag",
-                    "use_for_stellar_parameter_inference",
-                    "use_for_stellar_composition_inference"] \
-        and role in (QtCore.Qt.DisplayRole, QtCore.Qt.CheckStateRole):
+        if attr in [
+            "is_acceptable",
+            "is_upper_limit",
+            "user_flag",
+            "use_for_stellar_parameter_inference",
+            "use_for_stellar_composition_inference"
+        ] and role in (QtCore.Qt.DisplayRole, QtCore.Qt.CheckStateRole):
             if role == QtCore.Qt.CheckStateRole:
                 return QtCore.Qt.Checked if value else QtCore.Qt.Unchecked
             else:
@@ -1816,8 +1905,7 @@ class MeasurementTableModelBase(QtCore.QAbstractTableModel):
         return  QtCore.Qt.ItemIsSelectable|\
                 QtCore.Qt.ItemIsEnabled|\
                 QtCore.Qt.ItemIsUserCheckable
-    
-    
+
 class MeasurementSummaryTableModel(QtCore.QAbstractTableModel):
     header = ["El.", "Species", "N", "A(X)", "σ(X)", "[X/H]", "[X/Fe]"]
     def __init__(self, parent, session, *args):

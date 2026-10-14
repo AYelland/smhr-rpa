@@ -11,12 +11,12 @@ __all__ = ["SolveOptionsDialog"]
 
 import logging
 
-from PySide2 import (QtCore, QtWidgets as QtGui)
+from PySide6 import QtCore, QtWidgets
 
 logger = logging.getLogger(__name__)
 
 
-class SolveOptionsDialog(QtGui.QDialog):
+class SolveOptionsDialog(QtWidgets.QDialog):
 
     def __init__(self, session, **kwargs):
         """
@@ -32,45 +32,44 @@ class SolveOptionsDialog(QtGui.QDialog):
 
         # Display dialog in center and set size policy.
         self.setGeometry(640, 480, 640, 480)
-        desktop = QtGui.QApplication.desktop()
-        self.move(desktop.screen().rect().center() \
-            - self.rect().center())
+        screen = self.screen() if self.screen() else QtWidgets.QApplication.primaryScreen()
+        self.move(screen.geometry().center() - self.rect().center())
         self.setWindowTitle("Solve options for stellar parameter determination")
 
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
-        vbox = QtGui.QVBoxLayout(self)
+        vbox = QtWidgets.QVBoxLayout(self)
 
-        self.check_use_uncertainties_in_line_fits = QtGui.QCheckBox(self)
+        self.check_use_uncertainties_in_line_fits = QtWidgets.QCheckBox(self)
         self.check_use_uncertainties_in_line_fits.setText(
             "Use abundance uncertainties in line fits")
         vbox.addWidget(self.check_use_uncertainties_in_line_fits)
 
-        vbox.addItem(QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, 
-            QtGui.QSizePolicy.Expanding))
+        vbox.addItem(QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, 
+            QtWidgets.QSizePolicy.Expanding))
 
-        hbox = QtGui.QHBoxLayout()
-        self.btn_save_as_default = QtGui.QPushButton(self)
+        hbox = QtWidgets.QHBoxLayout()
+        self.btn_save_as_default = QtWidgets.QPushButton(self)
         self.btn_save_as_default.setText("Save settings as default")
         self.btn_save_as_default.clicked.connect(self.save_as_default)
         hbox.addWidget(self.btn_save_as_default)
 
 
-        hbox.addItem(QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, 
-            QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, 
+            QtWidgets.QSizePolicy.Minimum))
 
-        self.btn_apply = QtGui.QPushButton(self)
+        self.btn_apply = QtWidgets.QPushButton(self)
         self.btn_apply.setText("Apply")
         self.btn_apply.setDefault(True)
         self.btn_apply.clicked.connect(self.apply)
         hbox.addWidget(self.btn_apply)
 
 
-        self.btn_cancel = QtGui.QPushButton(self)
+        self.btn_cancel = QtWidgets.QPushButton(self)
         self.btn_cancel.setText("Cancel")
         self.btn_cancel.clicked.connect(self.close)
         hbox.addWidget(self.btn_cancel)
@@ -117,7 +116,7 @@ class SolveOptionsDialog(QtGui.QDialog):
         self.check_use_uncertainties_in_line_fits.isChecked())
 
 
-        QtGui.QMessageBox.information(self, "Saved", 
+        QtWidgets.QMessageBox.information(self, "Saved", 
             "Settings saved to local session default file.")
 
         return True

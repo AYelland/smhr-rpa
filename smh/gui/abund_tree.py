@@ -4,8 +4,7 @@ from __future__ import (division, print_function, absolute_import,
 import numpy as np
 import os
 import sys
-from PySide2 import (QtCore, QtWidgets as QtGui)
-from six import string_types, iteritems
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from smh import (Session, specutils)
 from smh.spectral_models import ProfileFittingModel, SpectralSynthesisModel
@@ -44,12 +43,12 @@ def summarize_abundances(tab):
         summary.append(summarize_abundances_species(ttab))
     return summary
 
-class AbundTreeView(QtGui.QTreeView):
+class AbundTreeView(QtWidgets.QTreeView):
     def __init__(self, parent, *args):
         super(AbundTreeView, self).__init__(parent, *args)
         self.parent = parent
-        font = QtGui.QFont("Monospace")
-        font.setStyleHint(QtGui.QFont.TypeWriter)
+        font = QtWidgets.QFont("Monospace")
+        font.setStyleHint(QtWidgets.QFont.TypeWriter)
         self.setFont(font)
         self.setUniformRowHeights(True)
         self.setItemDelegate(AbundTreeViewDelegate(self))
@@ -296,7 +295,7 @@ class AbundTreeModel(QtCore.QAbstractItemModel):
         return None
         
 if __name__=="__main__":
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     import main_ui
     app.window = main_ui.Ui_MainWindow()
     for i in range(app.window.tabs.count()):
@@ -312,7 +311,7 @@ if __name__=="__main__":
     session.metadata.update(defaults)
     ll = LineList.read(os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/linelists/complete.list")
     session.metadata["line_list"] = ll
-    import cPickle as pickle
+    import pickle
     print("Loading pre-saved spectral models"); start = time.time()
     with open(datadir+"/ewtest.pkl","rb") as fp:
         session.metadata["spectral_models"] = pickle.load(fp)
@@ -328,22 +327,22 @@ if __name__=="__main__":
     #abundtree.setModel(model)
     #abundtree.span_cols()
     #abundtree.setGeometry(900, 400, 900, 400)
-    #abundtree.move(QtGui.QApplication.desktop().screen().rect().center() \
+    #abundtree.move(QtWidgets.QApplication.desktop().screen().rect().center() \
     #              - abundtree.rect().center())
-    #sp = QtGui.QSizePolicy(
-    #    QtGui.QSizePolicy.MinimumExpanding, 
-    #    QtGui.QSizePolicy.MinimumExpanding)
+    #sp = QtWidgets.QSizePolicy(
+    #    QtWidgets.QSizePolicy.MinimumExpanding, 
+    #    QtWidgets.QSizePolicy.MinimumExpanding)
     #sp.setHeightForWidth(abundtree.sizePolicy().hasHeightForWidth())
     #abundtree.setSizePolicy(sp)
     #abundtree.show()
     
     #chemical_abundances_tab.show()
     
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
-class AbundTreeViewDelegate(QtGui.QStyledItemDelegate):
+class AbundTreeViewDelegate(QtWidgets.QStyledItemDelegate):
     def paint(self, painter, option, index):
         if isinstance(index.internalPointer(), AbundTreeElementSummaryItem):
-            option.font.setWeight(QtGui.QFont.Bold)
+            option.font.setWeight(QtGui.QFont.Weight.Bold)
         super(AbundTreeViewDelegate, self).paint(painter, option, index)
 

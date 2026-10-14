@@ -16,7 +16,9 @@ from collections import OrderedDict
 from hashlib import md5
 
 from astropy.io import fits
-from scipy import interpolate, ndimage, polyfit, poly1d, optimize as op
+import numpy as np
+from scipy import interpolate, ndimage, optimize as op
+from numpy import polyfit, poly1d
 
 logger = logging.getLogger(__name__)
 
@@ -577,7 +579,7 @@ class Spectrum1D(object):
         image = fits.open(path)
         metadata = OrderedDict()
         if 'SCIWAVE' not in image:
-        	image = image[0]
+            image = image[0]
         
         for key, value in image['SCIWAVE'].header.items():
             if key in metadata:
@@ -773,7 +775,7 @@ class Spectrum1D(object):
         
         if not filename.endswith('fits'):
             a = np.array([self.dispersion, self.flux, self.ivar]).T
-            np.savetxt(filename, a, fmt="%.6f".encode('ascii'))
+            np.savetxt(filename, a, fmt="%.6f")
             return
         
         else:
@@ -843,7 +845,7 @@ class Spectrum1D(object):
                     try:
                         hdu.header[key] = value
                     except ValueError:
-                        #logger.warn("Could not save header key/value combination: %s = %s" % (key, value, ))
+                        #logger.warning("Could not save header key/value combination: %s = %s" % (key, value, ))
                         print("Could not save header key/value combination: %s = %s".format(key, value))
                 hdulist = fits.HDUList([hdu,hdu2])
                 hdulist.writeto(filename, output_verify=output_verify, clobber=clobber)
@@ -1165,7 +1167,7 @@ class Spectrum1D(object):
 
             if function == 'spline':
                 if order > 5:
-                    logger.warn("Splines can only have a maximum order of 5. "
+                    logger.warning("Splines can only have a maximum order of 5. "
                         "Limiting order value to 5.")
                     order = 5
 
@@ -1333,7 +1335,7 @@ class Spectrum1D(object):
             zero_flux_indices)))
 
 
-        if knot_spacing is None or knot_spacing == 0 or continuum_indices == []:
+        if knot_spacing is None or knot_spacing == 0 or len(continuum_indices) == 0:
             knots = []
         else:
             knot_spacing = abs(knot_spacing)

@@ -9,7 +9,7 @@ from __future__ import (division, print_function, absolute_import,
 import sys
 
 import logging
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
+from PySide6 import QtCore, QtGui, QtWidgets
 import yaml
 import os
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     # Create the app and clean up any style bugs.
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
 
     except RuntimeError:
         # For development.
@@ -51,7 +51,7 @@ if __name__ == '__main__':
             (".Helvetica Neue DeskInterface", "Helvetica Neue")
         ]
         for substitute in substitutes:
-            QtGui2.QFont.insertSubstitution(*substitute)
+            QtGui.QFont.insertSubstitution(*substitute)
 
     # Create a global exception hook.
     sys._excepthook = sys.excepthook
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         # Load a GUI that shows the exception.
         exception_gui = exception.ExceptionWidget(
             exception_type, message, traceback)
-        exception_gui.exec_()
+        exception_gui.exec()
 
         # Ignore future exceptions of this kind?
         if exception_gui.ignore_in_future:
@@ -104,9 +104,9 @@ if __name__ == '__main__':
     app.window.raise_()
 
     # DEBUG
-    #testpath = os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/test_G64-12_v02.smh"
-    #logger.debug("Loading {}".format(testpath))
-    #app.window.open_session(path=testpath)
+    testpath = os.path.join(os.path.expanduser("~"), "Downloads", "testing.smh")
+    logger.debug("Loading {}".format(testpath))
+    app.window.open_session(path=testpath)
     
     # DEBUG
     #testpath = os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/spectra/hd122563.fits"
@@ -121,4 +121,4 @@ if __name__ == '__main__':
     #
     #session = app.window.session
     
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

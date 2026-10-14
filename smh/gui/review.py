@@ -11,7 +11,7 @@ from __future__ import (division, print_function, absolute_import,
 import logging
 import numpy as np
 import sys
-from PySide2 import (QtCore, QtWidgets as QtGui)
+from PySide6 import QtCore, QtWidgets
 import time
 
 import smh
@@ -26,16 +26,16 @@ from smh import utils
 logger = logging.getLogger(__name__)
 logger.addHandler(smh.handler)
 
-class ReviewTab(QtGui.QWidget):
+class ReviewTab(QtWidgets.QWidget):
     def __init__(self, parent):
         super(ReviewTab, self).__init__(parent)
         self.parent = parent
-        self.parent_layout = QtGui.QHBoxLayout(self)
+        self.parent_layout = QtWidgets.QHBoxLayout(self)
         
         #######################################
         #### LHS: Summary and Measurement Table
         #######################################
-        lhs_layout = QtGui.QVBoxLayout()
+        lhs_layout = QtWidgets.QVBoxLayout()
         self._init_summary_table()
         self._current_species = None
         lhs_layout.addWidget(self.summary_view)
@@ -48,7 +48,7 @@ class ReviewTab(QtGui.QWidget):
         ##################################
         #### RHS: Interactive Scatterplots
         ##################################
-        rhs_layout = QtGui.QVBoxLayout()
+        rhs_layout = QtWidgets.QVBoxLayout()
         rhs_layout.setSpacing(0)
         self._init_scatterplots()
         rhs_layout.addWidget(self.plot1)
@@ -60,11 +60,12 @@ class ReviewTab(QtGui.QWidget):
     def new_session_loaded(self):
         session = self.parent.session
         if session is None: return None
-        self.measurement_model.beginResetModel()
+        # self.measurement_model.beginResetModel()
         self.summary_model.new_session(session)
         self.full_measurement_model.new_session(session)
-        self.measurement_model.reindex()
-        self.measurement_model.endResetModel()
+        self.measurement_model.reset()
+        # self.measurement_model.reindex()
+        # self.measurement_model.endResetModel()
         self.measurement_view.update_session(session)
         self.refresh_plots()
         return None
@@ -138,7 +139,7 @@ class ReviewTab(QtGui.QWidget):
         self.summary_model = MeasurementSummaryTableModel(self, self.parent.session)
         # Create and link summary view
         self.summary_view = BaseTableView(self)
-        self.summary_view.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        self.summary_view.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.summary_view.setModel(self.summary_model)
         _ = self.summary_view.selectionModel()
         _.selectionChanged.connect(self.selected_summary_changed)
@@ -165,8 +166,8 @@ class ReviewTab(QtGui.QWidget):
         ## Sorting crashes :(
         #self.measurement_view.setSortingEnabled(True)
         #self.measurement_view.setItemDelegate(MeasurementTableDelegate(self,self.measurement_view))
-        self.measurement_view.setSizePolicy(QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.MinimumExpanding))
+        self.measurement_view.setSizePolicy(QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.MinimumExpanding))
 
         self.btn_filter_acceptable = btn_filter
         self.btn_filter_acceptable.clicked.connect(self.refresh_plots)
@@ -206,8 +207,8 @@ class ReviewTab(QtGui.QWidget):
                                     filters=filters, point_styles=point_styles, error_styles=error_styles,
                                     linefit_styles=linefit_styles,linemean_styles=linemean_styles)
         
-        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, 
-                               QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, 
+                               QtWidgets.QSizePolicy.MinimumExpanding)
         for fig in [self.plot1, self.plot2, self.plot3]:
             fig.setSizePolicy(sp)
         return None

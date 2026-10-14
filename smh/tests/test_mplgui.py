@@ -5,7 +5,9 @@ from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
 
 import logging
-from PySide import QtCore, QtGui
+import os
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PySide6 import QtWidgets
 import sys, os
 
 import matplotlib
@@ -17,12 +19,12 @@ from smh import Session
 
 datadir = os.path.dirname(os.path.abspath(__file__))+'/test_data'
 
-app = QtGui.QApplication(sys.argv)
+app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
 
 def create_blank_window(width=800, height=400):
-    window = QtGui.QMainWindow()
+    window = QtWidgets.QMainWindow()
     window.resize(width, height)
-    cw = QtGui.QWidget(window)
+    cw = QtWidgets.QWidget(window)
     window.setCentralWidget(cw)
     return window, cw
 
@@ -31,18 +33,19 @@ def test_MPLWidget():
     fig = mpl.MPLWidget(None, toolbar=False, autofocus=True)
     ax = fig.figure.add_subplot(1,1,1)
     ax.plot([1,2,3],[1,0,1],'k')
-    label = QtGui.QLabel("Test")
+    label = QtWidgets.QLabel("Test")
 
-    vbox = QtGui.QVBoxLayout(cw)
+    vbox = QtWidgets.QVBoxLayout(cw)
     vbox.addWidget(fig)
     vbox.addWidget(label)
-    return window
+    assert window is not None
+    window.close()
 
 def test_SMHSpecDisplay():
     session = Session.load(datadir+"/test_G64-12_v02.smh")
     window, cw = create_blank_window()
     
-    vbox = QtGui.QVBoxLayout(cw)
+    vbox = QtWidgets.QVBoxLayout(cw)
     
     def get_selected_model():
         return session.spectral_models[0]
@@ -60,11 +63,12 @@ def test_SMHSpecDisplay():
     model.fit()
     fig.set_selected_model(model)
     fig.update_spectrum_figure()
-    return window
+    assert window is not None
+    window.close()
 
 def test_SMHSpecDisplay_new_session():
     window, cw = create_blank_window()
-    vbox = QtGui.QVBoxLayout(cw)
+    vbox = QtWidgets.QVBoxLayout(cw)
     fig = SMHSpecDisplay(None, None,
                          enable_masks=True)
     vbox.addWidget(fig)
@@ -84,13 +88,14 @@ def test_SMHSpecDisplay_new_session():
     model.fit()
     fig.set_selected_model(model)
     fig.update_spectrum_figure()
-    return window
+    assert window is not None
+    window.close()
 
 def test_MeasurementTableView():
     session = Session.load(datadir+"/test_G64-12_v02.smh")
     session.measure_abundances()
     window, cw = create_blank_window()
-    vbox = QtGui.QVBoxLayout(cw)
+    vbox = QtWidgets.QVBoxLayout(cw)
 
     columns = ["is_acceptable","wavelength", "expot", "species", "loggf", "elements",
                "equivalent_width","equivalent_width_uncertainty",
@@ -102,7 +107,8 @@ def test_MeasurementTableView():
     view.setModel(measurement_table)
 
     vbox.addWidget(view)
-    return window
+    assert window is not None
+    window.close()
 
 #### The proxy model is super slow if you emit dataChanged.
 #### You can avoid this by explicitly connecting the view to update it.
@@ -111,7 +117,7 @@ def test_MeasurementTableView():
 #    session = Session.load(datadir+"/test_G64-12_v02.smh")
 #    session.measure_abundances()
 #    window, cw = create_blank_window()
-#    vbox = QtGui.QVBoxLayout(cw)
+#    vbox = QtWidgets.QVBoxLayout(cw)
 #
 #    columns = ["is_acceptable","wavelength", "expot", "species", "loggf", "elements",
 #               "equivalent_width","equivalent_width_uncertainty",
@@ -143,4 +149,4 @@ if __name__=="__main__":
     for w in ws:
         w.show()
         w.raise_()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

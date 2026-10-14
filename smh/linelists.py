@@ -132,7 +132,7 @@ class LineList(Table):
         if error:
             raise IOError(error_msg)
         else:
-            logger.warn(error_msg)
+            logger.warning(error_msg)
         return False
 
     @staticmethod
@@ -272,7 +272,7 @@ class LineList(Table):
 
         if ignore_conflicts:
             if self.verbose:
-                logger.warn("Ignoring conflicts: adding {} lines".format(len(new_ll)))
+                logger.warning("Ignoring conflicts: adding {} lines".format(len(new_ll)))
             if not in_place:
                 return table.vstack([self, new_ll])
             else:
@@ -584,7 +584,7 @@ class LineList(Table):
         #if np.all(loggf >= 0): 
         #    loggf = np.log10(loggf)
         #    # TODO this is the MOOG default, but it may not be a good idea...
-        #    logger.warn("MOOG: no lines with loggf < 0 in {}, assuming input is gf".format(filename))
+        #    logger.warning("MOOG: no lines with loggf < 0 in {}, assuming input is gf".format(filename))
         
         # TODO
         # Cite the filename as the reference for now
@@ -629,8 +629,8 @@ class LineList(Table):
         #    print("Read {} EWs out of {} lines".format(np.sum(~np.isnan(ew)),len(ew)))
         colnames = colnames + ['equivalent_width']
         # E. Holmbeck removed the second float thing; why was this here..?
-        dtypes = dtypes + [np.float32]
-        #dtypes = dtypes + [float]
+        # dtypes = dtypes + [np.float32]
+        dtypes = dtypes + [float]
         data = data + [ew]
         
         return cls(Table(data,names=colnames,dtype=dtypes),moog_columns=moog_columns,**kwargs)

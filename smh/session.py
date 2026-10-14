@@ -15,9 +15,11 @@ import os
 import sys
 import tarfile
 import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedSeq, CommentedMap
+
 import time
-from six import string_types, iteritems
-from six.moves import cPickle as pickle
+import pickle
 from shutil import copyfile, rmtree
 #from tempfile import mkdtemp
 from copy import deepcopy
@@ -36,7 +38,82 @@ from .optimize_stellar_params import optimize_feh as run_optimize_feh
 
 logger = logging.getLogger(__name__)
 
+_yaml = YAML()
+_yaml.preserve_quotes = True
+_yaml.indent(mapping=2, sequence=4, offset=2)
 
+def _to_commented(value):
+    """
+    Recursively convert a plain Python dict/list structure into
+    CommentedMap/CommentedSeq objects, so that ruamel.yaml can apply
+    proper formatting (flow style for coordinate pairs, block style
+    for containers) even to brand-new entries that have no prior
+    formatting metadata to inherit.
+    """
+    if isinstance(value, dict):
+        cm = CommentedMap()
+        for k, v in value.items():
+            cm[k] = _to_commented(v)
+        return cm
+
+    elif isinstance(value, (list, tuple)):
+        items = [_to_commented(v) for v in value]
+        seq = CommentedSeq(items)
+        # If every item is a scalar (not a nested list/dict), treat
+        # this as a "coordinate pair"-style list and render it as
+        # flow style, e.g. [7593.0, 7618.0].
+        if all(not isinstance(v, (list, dict, CommentedSeq, CommentedMap))
+               for v in items):
+            seq.fa.set_flow_style()
+        return seq
+
+    else:
+        return value
+
+def _deep_update(target, source):
+    if isinstance(target, dict) and isinstance(source, dict):
+        for key in list(target.keys()):
+            if key not in source:
+                del target[key]
+        for key, value in source.items():
+            if (key in target
+                    and isinstance(target[key], dict)
+                    and isinstance(value, dict)):
+                _deep_update(target[key], value)
+            elif (key in target
+                    and isinstance(target[key], list)
+                    and isinstance(value, list)):
+                _deep_update_list(target[key], value)
+            else:
+                # New key, or type mismatch: build a fully-formatted
+                # replacement rather than assigning raw plain Python data.
+                target[key] = _to_commented(value)
+        return target
+
+    return source
+
+def _deep_update_list(target_list, source_list):
+    n = min(len(target_list), len(source_list))
+    for i in range(n):
+        tgt_item, src_item = target_list[i], source_list[i]
+        if isinstance(tgt_item, list) and isinstance(src_item, (list, tuple)):
+            m = min(len(tgt_item), len(src_item))
+            for j in range(m):
+                tgt_item[j] = src_item[j]
+            if len(src_item) > len(tgt_item):
+                tgt_item.extend(_to_commented(v) for v in src_item[len(tgt_item):])
+            elif len(src_item) < len(tgt_item):
+                del tgt_item[len(src_item):]
+        else:
+            target_list[i] = _to_commented(src_item)
+
+    # New items appended wholesale.
+    for src_item in source_list[len(target_list):]:
+        target_list.append(_to_commented(src_item))
+
+    if len(source_list) < len(target_list):
+        del target_list[len(source_list):]
+        
 class BaseSession(object):
     """
     An abstract class for a SMH session.
@@ -50,8 +127,9 @@ class Session(BaseSession):
     """
 
     # The default settings path is only defined (hard-coded) here.
-    _default_settings_path = os.path.expanduser("~/.smh_session.defaults")
-
+    # _default_settings_path = os.path.expanduser("./smh/default_session.yaml")
+    _default_settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "default_session.yaml")
+    
     def __init__(self, spectrum_paths, twd=None, from_load=False, **kwargs):
         """
         Create a new session from input spectra.
@@ -60,7 +138,7 @@ class Session(BaseSession):
             Filename of a single spectrum, or an iterable of spectrum filenames.
         """
 
-        if isinstance(spectrum_paths, string_types):
+        if isinstance(spectrum_paths, str):
             spectrum_paths = (spectrum_paths, )
 
         if twd is None:
@@ -157,7 +235,7 @@ class Session(BaseSession):
             # Construct any default spectral models.
             deconstructed_spectral_models = self.setting(("default_spectral_models", ))
             if deconstructed_spectral_models is not None:
-                logger.warn("default_spectral_models is not implemented (skipping)")
+                logger.warning("default_spectral_models is not implemented (skipping)")
 
         return None
 
@@ -206,29 +284,21 @@ class Session(BaseSession):
             "input_spectra": list(map(os.path.basename, twd_paths))
         }
 
-
         def safe_path(path, twd, metadata):
             """
             Function to ensure that we don't have filename clashes in the
             temporary working directory.
             """
-
             basename = os.path.basename(path)
-            existing_paths = np.hstack(metadata["reconstruct_paths"].values())
-
+            existing_paths = np.hstack(list(metadata["reconstruct_paths"].values()))
             if basename in existing_paths:
-
                 while basename in existing_paths:
                     basename = ".".join([
                         utils.random_string(), os.path.basename(path)])
-
                 new_path = os.path.join(twd, basename)
-
                 if os.path.exists(path):
                     copyfile(path, new_path)
-
                 return new_path
-
             return path
 
 
@@ -284,7 +354,7 @@ class Session(BaseSession):
             # Go through the key/value pairs and see what can/cannot be
             # saved.
             failed_on = []
-            for key, value in iteritems(metadata):
+            for key, value in metadata.items():
                 try:
                     with open(os.path.join(twd, ".damaged"), "wb") as dfp:
                         pickle.dump([key, value], dfp, protocol)
@@ -306,10 +376,10 @@ class Session(BaseSession):
                 tarball.add(path, arcname=os.path.basename(path))
 
             except:
-                logger.warn(
+                logger.warning(
                     "Cannot save path '{}' to session:".format(path))
 
-                logger.warn(
+                logger.warning(
                     "Continuing to save session without this path "
                     "before raising the issue")
                 failed_paths.append(path)
@@ -550,7 +620,7 @@ class Session(BaseSession):
         :param key_tree:
             A tuple containing a tree of dictionary keys.
         """
-        if isinstance(key_tree, string_types):
+        if isinstance(key_tree, str):
             key_tree = [key_tree]
         
         value = self.metadata
@@ -561,10 +631,7 @@ class Session(BaseSession):
         except KeyError:
             # Check in defaults.
             with open(self._default_settings_path, "rb") as fp:
-                try:
-                    default = yaml.load(fp, yaml.FullLoader)
-                except AttributeError:
-                    default = yaml.load(fp)
+                default = yaml.safe_load(fp)
 
             try:
                 for key in key_tree:
@@ -578,7 +645,6 @@ class Session(BaseSession):
         else:
             return value
 
-
     def update_default_setting(self, key_tree, value):
         """
         Update a default value in the local settings file.
@@ -590,26 +656,32 @@ class Session(BaseSession):
             The value for the setting.
         """
 
-        # Open the defaults.
-        with open(self._default_settings_path, "rb") as fp:
-            try:
-                default = yaml.load(fp, yaml.FullLoader)
-            except AttributeError:
-                default = yaml.load(fp)
+        # Open the defaults, preserving comments/formatting.
+        with open(self._default_settings_path, "r") as fp:
+            default = _yaml.load(fp)
         
-        # Holmbeck:changed "defaults" to "default"
+        # Holmbeck: changed "defaults" to "default"
         branch = default
         for key in key_tree[:-1]:
-            branch.setdefault(key, {})
+            if key not in branch:
+                branch[key] = {}
             branch = branch[key]
-        branch[key_tree[-1]] = value
+
+        last_key = key_tree[-1]
+        existing = branch.get(last_key)
+
+        if isinstance(existing, (dict, list)) and isinstance(value, (dict, list)):
+            # Merge in place instead of wholesale replacement.
+            _deep_update(existing, value)
+        else:
+            # Scalar leaf — direct assignment is safe (doesn't destroy a
+            # container's comments, since nothing nested is being replaced).
+            branch[last_key] = value
 
         with open(self._default_settings_path, "w") as fp:
-            fp.write(yaml.dump(default))
+            _yaml.dump(default, fp)
 
         return True
-
-
 
     def _get_overlap_order(self, wavelength_regions, template_spectrum=None):
         """
@@ -714,7 +786,7 @@ class Session(BaseSession):
             normalization_kwargs = self.setting(("rv", "normalization"))
 
         # Is the template spectrum actually a filename?
-        if isinstance(template_spectrum, string_types):
+        if isinstance(template_spectrum, str):
             self.metadata["rv"]["template_spectrum_path"] = template_spectrum
             template_spectrum = specutils.Spectrum1D.read(template_spectrum,
                 debug=True)
@@ -1071,7 +1143,7 @@ class Session(BaseSession):
                 self.metadata["stellar_parameters"] = deepcopy(saved_stellar_params)
                 logger.info("Teff: {} + {}".format(Teff, Teff_error))
             except:
-                logger.warn("Error calculating uncertainties in Teff")
+                logger.warning("Error calculating uncertainties in Teff")
                 raise
 
             # logg
@@ -1107,7 +1179,7 @@ class Session(BaseSession):
                 self.metadata["stellar_parameters"] = deepcopy(saved_stellar_params)
                 logger.info("logg: {:.2f} + {:.2f}".format(logg, logg_error))
             except:
-                logger.warn("Error calculating uncertainties in logg")
+                logger.warning("Error calculating uncertainties in logg")
                 raise
 
             # vt
@@ -1132,7 +1204,7 @@ class Session(BaseSession):
                 self.metadata["stellar_parameters"] = deepcopy(saved_stellar_params)
                 logger.info("vt: {:.2f} + {:.2f}".format(vt, vt_error))
             except:
-                logger.warn("Error calculating uncertainties in vt")
+                logger.warning("Error calculating uncertainties in vt")
                 raise
 
         except Exception as e:
@@ -1145,8 +1217,8 @@ class Session(BaseSession):
                     Teff_error, logg_error, vt_error, mh_error, time.time()-start))
             if systematic_errors is not None:
                 if len(systematic_errors) != 4:
-                    logger.warn("Systematic errors are not length 4! {}".format(systematic_errors))
-                    logger.warn("Skipping...")
+                    logger.warning("Systematic errors are not length 4! {}".format(systematic_errors))
+                    logger.warning("Skipping...")
                 else:
                     self.set_stellar_parameters_errors("sys",
                                                        systematic_errors[0], systematic_errors[1],
@@ -1486,7 +1558,7 @@ class Session(BaseSession):
         transitions = self._spectral_models_to_transitions(stellar_parameter_spectral_models)
         finite = np.logical_and(np.isfinite(transitions["equivalent_width"]), transitions["equivalent_width"] > 0.01)
         if finite.sum() != len(finite):
-            logger.warn("Number of finite transitions ({}) != number of transitions ({})".format(
+            logger.warning("Number of finite transitions ({}) != number of transitions ({})".format(
                 finite.sum(), len(finite)))
         transitions = transitions[finite]
         logger.info("Optimizing with {} transitions".format(len(transitions)))
@@ -1497,7 +1569,7 @@ class Session(BaseSession):
         new_Teff, new_vt, new_logg, new_MH = final_parameters
         
         if not out[0]:
-            logger.warn("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
+            logger.warning("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
                 new_Teff, new_logg, new_vt, new_MH))
             
         
@@ -1527,7 +1599,7 @@ class Session(BaseSession):
         transitions = self._spectral_models_to_transitions(stellar_parameter_spectral_models)
         finite = np.logical_and(np.isfinite(transitions["equivalent_width"]), transitions["equivalent_width"] > 0.01)
         if finite.sum() != len(finite):
-            logger.warn("Number of finite transitions ({}) != number of transitions ({})".format(
+            logger.warning("Number of finite transitions ({}) != number of transitions ({})".format(
                 finite.sum(), len(finite)))
         transitions = transitions[finite]
         logger.info("Optimizing with {} transitions".format(len(transitions)))
@@ -1538,7 +1610,7 @@ class Session(BaseSession):
         new_Teff, new_vt, new_logg, new_MH = final_parameters
         
         if not out[0]:
-            logger.warn("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
+            logger.warning("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
                 new_Teff, new_logg, new_vt, new_MH))
             
         
@@ -1789,7 +1861,7 @@ class Session(BaseSession):
     def _export_ascii_abundance_table(self, filepath, summary_dict):
         out = np.zeros((len(summary_dict), 7))
         for i,(species, (N, logeps, stdev, stderr, XH, XFe)) in \
-                enumerate(iteritems(summary_dict)):
+                enumerate(summary_dict.items()):
             out[i,:] = [species, N, logeps, stdev, stderr, XH, XFe]
         names = ["species", "N", "logeps", "stdev", "stderr", "[X/H]", "[X/Fe]"]
         tab = astropy.table.Table(out, names=names)
@@ -1896,29 +1968,23 @@ class Session(BaseSession):
 
     def make_summary_plot(self, figure=None):
         with open(self._default_settings_path, "rb") as fp:
-            try:
-                defaults = yaml.load(fp, yaml.FullLoader)
-            except AttributeError:
-                defaults = yaml.load(fp)
+            defaults = yaml.safe_load(fp)
         if "summary_figure" not in defaults:
             raise RuntimeError("Defaults file ({}) must have summary_figure".format(\
                     self._default_settings_path))
         if not isinstance(self.normalized_spectrum, specutils.Spectrum1D):
-            logger.warn("Must have normalized spectrum to make summary plot")
+            logger.warning("Must have normalized spectrum to make summary plot")
             return None
         return smh_plotting.make_summary_plot(defaults["summary_figure"],
                                        self.normalized_spectrum, figure)
     def make_ncap_summary_plot(self, figure=None):
         with open(self._default_settings_path, "rb") as fp:
-            try:
-                defaults = yaml.load(fp, yaml.FullLoader)
-            except AttributeError:
-                defaults = yaml.load(fp)
+            defaults = yaml.safe_load(fp)
         if "summary_figure_ncap" not in defaults:
-            raise RuntimeError("Defaults file ({}) must have summary_figure".format(\
+            raise RuntimeError("Defaults file ({}) must have summary_figure_ncap".format(\
                     self._default_settings_path))
         if not isinstance(self.normalized_spectrum, specutils.Spectrum1D):
-            logger.warn("Must have normalized spectrum to make summary plot")
+            logger.warning("Must have normalized spectrum to make neutron capture summary plot")
             return None
         return smh_plotting.make_summary_plot(defaults["summary_figure_ncap"],
                                        self.normalized_spectrum, figure)
@@ -2069,8 +2135,8 @@ class Session(BaseSession):
                 else:
                     ll = LineList.read(_filename)
             except Exception as e:
-                logger.warn("Could not import {}".format(_filename))
-                logger.warn(e)
+                logger.warning("Could not import {}".format(_filename))
+                logger.warning(e)
             else:
                 spectral_models_to_add = []
                 for i in range(len(ll)):
@@ -2118,15 +2184,15 @@ class Session(BaseSession):
                                                         copy_to_working_dir=copy_to_working_dir,
                                                         **kwargs)
             except Exception as e:
-                logger.warn("Could not import {}".format(_filename))
-                logger.warn(e)
+                logger.warning("Could not import {}".format(_filename))
+                logger.warning(e)
             else:
                 num_added += 1
                 if copy_to_working_dir:
                     self.copy_file_to_working_directory(_filename)
         
         if num_added != len(master_list):
-            logger.warn("Created {} models out of {} in the master list".format(
+            logger.warning("Created {} models out of {} in the master list".format(
                     num_added, len(master_list)))
 
         if copy_to_working_dir:

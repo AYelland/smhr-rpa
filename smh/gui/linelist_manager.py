@@ -12,21 +12,22 @@ from __future__ import (division, print_function, absolute_import,
 import logging
 import numpy as np
 import os
+import re
 import sys
 from copy import deepcopy
-from PySide2 import (QtCore, QtGui as QtGui2, QtWidgets as QtGui)
-from six import string_types
-from six.moves import cPickle as pickle
+from PySide6 import QtCore, QtGui, QtWidgets
+import pickle
 from time import time # DEBUG TODO
 
 from astropy.table import Column
 
 from smh.linelists import LineList
 from smh.spectral_models import (ProfileFittingModel, SpectralSynthesisModel)
-
 from smh.gui.base import BaseTableView, MeasurementTableModelBase
+from smh.utils import spectral_model_conflicts
 
 from periodic_table import PeriodicTableDialog
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,10 @@ if sys.platform == "darwin":
         (".Helvetica Neue DeskInterface", "Helvetica Neue")
     ]
     for substitute in substitutes:
-        QtGui2.QFont.insertSubstitution(*substitute)
+        QtGui.QFont.insertSubstitution(*substitute)
 
 
-class TransitionsDialog(QtGui.QDialog):
+class TransitionsDialog(QtWidgets.QDialog):
 
     def __init__(self, session, callbacks=None, **kwargs):
         """
@@ -57,25 +58,24 @@ class TransitionsDialog(QtGui.QDialog):
         self.callbacks = callbacks or []
         
         self.setGeometry(900, 400, 900, 400)
-        desktop = QtGui.QApplication.desktop()
-        self.move(desktop.screen().rect().center() \
-            - self.rect().center())
+        screen = self.screen() if self.screen() else QtWidgets.QApplication.primaryScreen()
+        self.move(screen.geometry().center() - self.rect().center())
         self.setWindowTitle("Manage Measurements")
         
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
         
-        parent_vbox = QtGui.QVBoxLayout(self)
+        parent_vbox = QtWidgets.QVBoxLayout(self)
         self._create_table()
         parent_vbox.addWidget(self.tableview)
         
         # A horizontal line.
-        hr = QtGui.QFrame(self)
-        hr.setFrameShape(QtGui.QFrame.HLine)
-        hr.setFrameShadow(QtGui.QFrame.Sunken)
+        hr = QtWidgets.QFrame(self)
+        hr.setFrameShape(QtWidgets.QFrame.HLine)
+        hr.setFrameShadow(QtWidgets.QFrame.Sunken)
         parent_vbox.addWidget(hr)
         
         hbox = self._create_buttons()
@@ -92,46 +92,46 @@ class TransitionsDialog(QtGui.QDialog):
         self.tableview.setModel(self.tablemodel)
 
     def _create_buttons(self):
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
         
         # Import from raw line lists
-        self.btn_add_profile_list = QtGui.QPushButton(self)
+        self.btn_add_profile_list = QtWidgets.QPushButton(self)
         self.btn_add_profile_list.setText("Add EQW List")
         self.btn_add_profile_list.clicked.connect(self.add_profile_list)
         hbox.addWidget(self.btn_add_profile_list)
         
-        self.btn_add_synth_list = QtGui.QPushButton(self)
+        self.btn_add_synth_list = QtWidgets.QPushButton(self)
         self.btn_add_synth_list.setText("Add Synth List")
         self.btn_add_synth_list.clicked.connect(self.add_synth_list)
         hbox.addWidget(self.btn_add_synth_list)
         
-        hbox.addItem(QtGui.QSpacerItem(40, 20, 
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(40, 20, 
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
 
         # Import and export pickled spectral models
-        self.btn_import_spec_models = QtGui.QPushButton(self)
+        self.btn_import_spec_models = QtWidgets.QPushButton(self)
         self.btn_import_spec_models.setText("Import Spectral Models")
         self.btn_import_spec_models.clicked.connect(self.import_spectral_model_states)
         hbox.addWidget(self.btn_import_spec_models)
 
-        self.btn_export_spec_models = QtGui.QPushButton(self)
+        self.btn_export_spec_models = QtWidgets.QPushButton(self)
         self.btn_export_spec_models.setText("Export Spectral Models")
         self.btn_export_spec_models.clicked.connect(self.export_spectral_model_states)
         hbox.addWidget(self.btn_export_spec_models)
         
-        hbox.addItem(QtGui.QSpacerItem(40, 20, 
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(40, 20, 
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
 
         # Import a master line list
-        self.btn_import_master_list = QtGui.QPushButton(self)
+        self.btn_import_master_list = QtWidgets.QPushButton(self)
         self.btn_import_master_list.setText("Import Master List")
         self.btn_import_master_list.clicked.connect(self.import_master_list)
         hbox.addWidget(self.btn_import_master_list)
         
-        hbox.addItem(QtGui.QSpacerItem(40, 20, 
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(40, 20, 
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
 
-        self.btn_ok = QtGui.QPushButton(self)
+        self.btn_ok = QtWidgets.QPushButton(self)
         self.btn_ok.setText("OK")
         self.btn_ok.setFocus()
         self.btn_ok.clicked.connect(self.close)
@@ -155,10 +155,10 @@ class TransitionsDialog(QtGui.QDialog):
 
 
     def open_file(self, caption="", dir="", filter=""):
-        paths, _ = QtGui.QFileDialog.getOpenFileName(self,
+        paths, _ = QtWidgets.QFileDialog.getOpenFileName(self,
             caption=caption, dir=dir, filter=filter)
         if paths is None: return None
-        if isinstance(paths, string_types):
+        if isinstance(paths, str):
             paths = [paths]
         return paths
 
@@ -190,7 +190,7 @@ class TransitionsDialog(QtGui.QDialog):
                             " by synthesizing the transitions in {}:".format(
                     os.path.basename(path)),
                 multiple_select=True)
-            dialog.exec_()
+            dialog.exec()
             
             if len(dialog.selected_elements) == 0:
                 # Nothing selected. Skip this filename.
@@ -268,14 +268,14 @@ class TransitionsDialogTableView(BaseTableView):
         :param event:
             The mouse event that triggered the menu.
         """
-        menu = QtGui.QMenu(self)
+        menu = QtWidgets.QMenu(self)
         delete_action = menu.addAction("Delete")
 
         any_selected = len(self.selectionModel().selectedRows()) > 0
         if not any_selected:
             delete_action.setEnabled(False)
         
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec(self.mapToGlobal(event.pos()))
         if action == delete_action:
             self.delete_selected_models()
         return None
@@ -299,9 +299,9 @@ class TransitionsDialogTableView(BaseTableView):
 if __name__ == "__main__":
 
     # This is just for development testing.
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = TransitionsDialog(None)
-    window.exec_()
+    window.exec()
 
     
 
@@ -380,7 +380,7 @@ class LineListTableModel(QtCore.QAbstractTableModel):
         if "line_list" not in self.session.metadata:
             return None
 
-        self.emit(QtCore.SIGNAL("layoutAboutToBeChanged()"))
+        self.layoutAboutToBeChanged.emit()
 
         self.session.metadata["line_list"].sort(self.columns[column])
         if order == QtCore.Qt.DescendingOrder:
@@ -388,7 +388,7 @@ class LineListTableModel(QtCore.QAbstractTableModel):
 
         self.dataChanged.emit(self.createIndex(0, 0),
             self.createIndex(self.rowCount(0), self.columnCount(0)))
-        self.emit(QtCore.SIGNAL("layoutChanged()"))
+        self.layoutChanged.emit()
         
         # Must update hash sorting after any modification to line list
         self.session.metadata["line_list_argsort_hashes"] = np.argsort(
@@ -402,7 +402,7 @@ class LineListTableModel(QtCore.QAbstractTableModel):
                 QtCore.Qt.ItemIsSelectable
 
 
-class LineListTableView(QtGui.QTableView):
+class LineListTableView(QtWidgets.QTableView):
 
     def __init__(self, parent, session, *args):
         super(LineListTableView, self).__init__(parent, *args)
@@ -418,7 +418,7 @@ class LineListTableView(QtGui.QTableView):
             The mouse event that triggered the menu.
         """
         
-        menu = QtGui.QMenu(self)
+        menu = QtWidgets.QMenu(self)
         import_lines = menu.addAction("Import lines..")
         menu.addSeparator()
         import_profiles = menu.addAction("Import lines for profile models..")
@@ -437,7 +437,7 @@ class LineListTableView(QtGui.QTableView):
             add_synth_action.setEnabled(False)
             delete_action.setEnabled(False)
 
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec(self.mapToGlobal(event.pos()))
         if action == import_lines:
             self.import_from_filename()
 
@@ -532,7 +532,7 @@ class LineListTableView(QtGui.QTableView):
                             " by synthesizing the transitions in {}:".format(
                                 os.path.basename(filename)),
                         multiple_select=True)
-                    dialog.exec_()
+                    dialog.exec()
     
                     if len(dialog.selected_elements) == 0:
                         # Nothing selected. Skip this filename.
@@ -613,7 +613,7 @@ class LineListTableView(QtGui.QTableView):
                 selectable_elements=selectable_elements,
                 explanation="Please select which element(s) will be measured:",
                 multiple_select=True)
-            dialog.exec_()
+            dialog.exec()
 
             if len(dialog.selected_elements) == 0:
                 # Nothing selected. Don't create a new spectral model.
@@ -656,7 +656,7 @@ class LineListTableView(QtGui.QTableView):
         # Anything to do?
         if N_skipped > 0:
             # Display a warning dialog.
-            QtGui.QMessageBox.warning(self, "Lines cannot be deleted",
+            QtWidgets.QMessageBox.warning(self, "Lines cannot be deleted",
                 "{} line(s) selected for deletion cannot be removed because "
                 "they are associated with existing spectral models.\n\n"
                 "Delete the associated spectral models before deleting "
@@ -684,10 +684,10 @@ class LineListTableView(QtGui.QTableView):
         """ Import atomic physics data from a line list file. """
 
         if filenames is None:
-            filenames, selected_filter = QtGui.QFileDialog.getOpenFileNames(self,
+            filenames, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(self,
                 caption="Select files", dir="")
         else:
-            if isinstance(filenames, string_types):
+            if isinstance(filenames, str):
                 filenames = [filenames]
         if not filenames:
             return None
@@ -713,10 +713,10 @@ class LineListTableView(QtGui.QTableView):
         """ Import profile models with pre-measured equivalent widths. """
 
         if filenames is None:
-            filenames, selected_filter = QtGui.QFileDialog.getOpenFileNames(self,
+            filenames, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(self,
                 caption="Select pre-measured transition files", dir="")
         else:
-            if isinstance(filenames, string_types):
+            if isinstance(filenames, str):
                 filenames = [filenames]
         if not filenames:
             return None
@@ -733,7 +733,7 @@ class LineListTableView(QtGui.QTableView):
         return None
 
 
-class LineListTableDelegate(QtGui.QItemDelegate):
+class LineListTableDelegate(QtWidgets.QItemDelegate):
     def __init__(self, parent, session, *args):
         super(LineListTableDelegate, self).__init__(parent, *args)
         self.session = session
@@ -742,16 +742,16 @@ class LineListTableDelegate(QtGui.QItemDelegate):
     def paint(self, painter, option, index):
         painter.save()
 
-        painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
-        if option.state & QtGui.QStyle.State_Selected:
-            painter.setBrush(QtGui.QBrush(
+        painter.setPen(QtWidgets.QPen(QtCore.Qt.NoPen))
+        if option.state & QtWidgets.QStyle.State_Selected:
+            painter.setBrush(QtWidgets.QBrush(
                 self.parent().palette().highlight().color()))
         else:
-            painter.setBrush(QtGui.QBrush(QtCore.Qt.white))
+            painter.setBrush(QtWidgets.QBrush(QtCore.Qt.white))
 
         painter.drawRect(option.rect)
 
-        painter.setPen(QtGui.QPen(QtCore.Qt.black))
+        painter.setPen(QtWidgets.QPen(QtCore.Qt.black))
         painter.drawText(option.rect, QtCore.Qt.AlignLeft|QtCore.Qt.AlignCenter,
             index.data())
         painter.restore()
@@ -760,7 +760,7 @@ class LineListTableDelegate(QtGui.QItemDelegate):
 _COLORS = ["#FFEBB0", "#FFB05A", "#F84322", "#C33A1A", "#9F3818"]
 
 
-class SpectralModelsTableDelegate(QtGui.QItemDelegate):
+class SpectralModelsTableDelegate(QtWidgets.QItemDelegate):
     def __init__(self, parent, session, *args):
         super(SpectralModelsTableDelegate, self).__init__(parent, *args)
         self.session = session
@@ -774,9 +774,9 @@ class SpectralModelsTableDelegate(QtGui.QItemDelegate):
         painter.save()
 
         # set background color
-        painter.setPen(QtGui.QPen(QtCore.Qt.NoPen))
-        if option.state & QtGui.QStyle.State_Selected:
-            painter.setBrush(QtGui.QBrush(
+        painter.setPen(QtWidgets.QPen(QtCore.Qt.NoPen))
+        if option.state & QtWidgets.QStyle.State_Selected:
+            painter.setBrush(QtWidgets.QBrush(
                 self.parent().palette().highlight().color()))
         else:
 
@@ -791,14 +791,14 @@ class SpectralModelsTableDelegate(QtGui.QItemDelegate):
                         color = _COLORS[i % len(_COLORS)]
                         break
 
-                painter.setBrush(QtGui.QBrush(QtGui.QColor(color)))
+                painter.setBrush(QtWidgets.QBrush(QtWidgets.QColor(color)))
             else:
-                painter.setBrush(QtGui.QBrush(QtCore.Qt.white))
+                painter.setBrush(QtWidgets.QBrush(QtCore.Qt.white))
             
         painter.drawRect(option.rect)
 
         # set text color
-        painter.setPen(QtGui.QPen(QtCore.Qt.black))
+        painter.setPen(QtWidgets.QPen(QtCore.Qt.black))
         painter.drawText(option.rect, QtCore.Qt.AlignLeft|QtCore.Qt.AlignCenter, index.data())
         painter.restore()
 
@@ -902,7 +902,7 @@ class SpectralModelsTableModel(QtCore.QAbstractTableModel):
         if "spectral_models" not in self.session.metadata:
             return None
 
-        self.emit(QtCore.SIGNAL("layoutAboutToBeChanged()"))
+        self.layoutAboutToBeChanged.emit()
 
         sorters = {
             0: lambda sm: sm.transitions["wavelength"].mean(),
@@ -923,7 +923,7 @@ class SpectralModelsTableModel(QtCore.QAbstractTableModel):
 
         self.dataChanged.emit(self.createIndex(0, 0),
             self.createIndex(self.rowCount(0), self.columnCount(0)))
-        self.emit(QtCore.SIGNAL("layoutChanged()"))
+        self.layoutChanged.emit()
 
 
     def flags(self, index):
@@ -944,7 +944,7 @@ class SpectralModelsTableModel(QtCore.QAbstractTableModel):
 
 
 
-class SpectralModelsTableView(QtGui.QTableView):
+class SpectralModelsTableView(QtWidgets.QTableView):
 
     def __init__(self, parent, session, *args):
         super(SpectralModelsTableView, self).__init__(parent, *args)
@@ -960,7 +960,7 @@ class SpectralModelsTableView(QtGui.QTableView):
             The mouse event that triggered the menu.
         """
         
-        menu = QtGui.QMenu(self)
+        menu = QtWidgets.QMenu(self)
         
         export_spectral_models = menu.addAction("Export spectral models..")
 
@@ -1017,7 +1017,7 @@ class SpectralModelsTableView(QtGui.QTableView):
                 else:
                     deselect_for_sp_abundances.setEnabled(False)
 
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec(self.mapToGlobal(event.pos()))
         if action == export_spectral_models:
             self.export_selected_spectral_models()
 
@@ -1094,8 +1094,17 @@ class SpectralModelsTableView(QtGui.QTableView):
         to disk.
         """
 
-        path, _ = QtGui.QFileDialog.getSaveFileName(self,
-            caption="Export spectral models to disk", dir="", filter="*.pkl")
+        try:
+            star_name = str(self.session.metadata["OBJECT"]).strip()
+        except (AttributeError, KeyError, TypeError):
+            star_name = ""
+        star_name = re.sub(r'[\\/:*?"<>|]+', "_", star_name).strip(" ._")
+        default_name = "{}_spectral_models.pkl".format(star_name) if star_name else "spectral_models.pkl"
+
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+            caption="Export spectral models to disk",
+            dir=default_name,
+            filter="Pickle file (*.pkl);;All files (*)")
         if not path: return
 
         transition_indices = []
@@ -1125,7 +1134,5 @@ class SpectralModelsTableView(QtGui.QTableView):
             pickle.dump((line_list_subset, spectral_model_states), fp, -1)
 
         return None
-
-
 
 

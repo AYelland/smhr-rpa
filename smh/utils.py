@@ -12,7 +12,6 @@ import string
 import sys
 import traceback
 import tempfile
-from six import string_types
 
 from collections import Counter, OrderedDict
 
@@ -189,7 +188,8 @@ def fit_line(x, y, yerr=None):
         return np.nan, np.nan, np.nan, np.nan, np.nan, 0
     
     # E. Holmbeck added
-    if np.all(yerr) is None or np.all(np.isnan(yerr)): yerr=None
+    if yerr is None or (np.size(yerr) == 0) or np.all(np.isnan(np.asarray(yerr, dtype=float))):
+        yerr = None
     if yerr is not None:
         # E. Holmbeck tried it by hand, but failed.
         yerr = np.array(yerr[finite], dtype=float)
@@ -322,13 +322,13 @@ periodic_table = periodic_table.replace(" Ba ", " Ba " + lanthanoids + " ") \
 del actinoids, lanthanoids
 
 
-
 def hashed_id():
-    try:
-        salt = getstatusoutput("git config --get user.name")[1]
-    except:
+    status, output = getstatusoutput("git config --get user.name")
+    if status == 0 and output:
+        salt = output
+    else:
         import uuid
-        salt = uuid.uuid3(uuid.NAMESPACE_DNS, "")
+        salt = str(uuid.uuid3(uuid.NAMESPACE_DNS, ""))
     return sha(salt.encode("utf-8")).hexdigest()
 hashed_id = hashed_id()
 
@@ -478,7 +478,7 @@ def element_to_species(element_repr):
     to a floating point """
     
     element_repr = _debytify(element_repr)
-    if not isinstance(element_repr, string_types):
+    if not isinstance(element_repr, str):
         raise TypeError("element must be represented by a string-type {} {}".format(element_repr, type(element_repr)))
         
     if element_repr.count(" ") > 0:
@@ -509,7 +509,7 @@ def element_to_atomic_number(element_repr):
     """
     
     element_repr = _debytify(element_repr)
-    if not isinstance(element_repr,  string_types):
+    if not isinstance(element_repr,  str):
         raise TypeError("element must be represented by a string-type {} {}".format(element_repr, type(element_repr)))
     
     element = element_repr.title().strip().split()[0]
@@ -1206,7 +1206,7 @@ def get_synth_eqw(model, window=1.0, wavelength=None,
     abundances = model.metadata["rt_abundances"].copy()
     for key in abundances:
         if key != model.elements[0]: abundances[key] = -9.0
-    abundances[model.elements[0]] = model.metadata["fitted_result"][0].values()[0]
+    abundances[model.elements[0]] = next(iter(model.metadata["fitted_result"][0].values()))
     print(abundances)
     
     synth_dispersion, intensities, meta = model.session.rt.synthesize(

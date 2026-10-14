@@ -675,7 +675,7 @@ class ProfileFittingModel(BaseSpectralModel):
             abundances = self.session.rt.abundance_cog(
                 self.session.stellar_photosphere, transitions, twd=self.session.twd)
         except Exception as e:
-            logger.warn(failure_message)
+            logger.warning(failure_message)
             return None
         else:
             if len(abundances)==2:

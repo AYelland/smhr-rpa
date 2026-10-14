@@ -17,7 +17,7 @@ __all__ = ["celestial_velocities", "corrections", "corrections_from_headers"]
 import logging
 #import yaml
 import json
-from pkg_resources import resource_stream
+from importlib.resources import files
 
 import numpy as np
 import astropy.constants as constants
@@ -419,8 +419,8 @@ def corrections_from_headers(headers):
         #with resource_stream(__name__, "observatories.yaml") as fp:
         #    observatories_dictionary = yaml.load(fp)
         # E. Holmbeck changed this from yaml to json
-        with resource_stream(__name__, "sites.json") as fp:
-            observatories_dictionary = json.load(fp)
+        observatories_dictionary = json.loads(
+            (files(__package__) / "sites.json").read_text(encoding="utf-8"))
 
         origin = origin.strip().lower()
         if origin not in observatories_dictionary:
