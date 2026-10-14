@@ -9,7 +9,8 @@ from __future__ import (division, print_function, absolute_import,
 import sys
 import logging
 import os
-from PySide import QtCore, QtGui
+import re
+from PySide6 import QtCore, QtGui, QtWidgets
 import yaml
 import numpy as np
 
@@ -25,29 +26,32 @@ from plotting import SummaryPlotDialog, SNRPlotDialog
 
 logger = logging.getLogger(__name__)
 
-class Ui_MainWindow(QtGui.QMainWindow):
+class Ui_MainWindow(QtWidgets.QMainWindow):
     """
     The main GUI window for Spectroscopy Made Hard.
     """
 
-    def __init__(self, session_path=None, spectrum_filenames=None):
+    def __init__(self, parent=None, session_path=None, spectrum_filenames=None):
         super(Ui_MainWindow, self).__init__()
 
+        self.parent = parent
+        
         self.unsaved_session_changes = False
         self.session = None
         self.session_path = None
 
         if session_path is not None and spectrum_filenames is not None:
-            raise WTFError
+            raise ValueError("Cannot specify both `session_path` and `spectrum_filenames`.") #WTFError
 
         # Load a session already?
         if session_path is not None:
             self.open_session(session_path)
 
         self.setObjectName("smh")
-        self.resize(1200, 600)
-        self.move(QtGui.QApplication.desktop().screen().rect().center() \
-            - self.rect().center())
+        screen = QtGui.QGuiApplication.primaryScreen()
+        avail = screen.availableGeometry()
+        self.resize(min(1200, avail.width()), min(900, avail.height()))
+        self.move(avail.center() - self.rect().center())
 
         # Initialise the menus and associated actions.
         self.__init_menus__()
@@ -60,6 +64,14 @@ class Ui_MainWindow(QtGui.QMainWindow):
             self.new_session(spectrum_filenames)
             self.rv_tab.cross_correlate_and_correct()
             self.normalization_tab.normalize_and_stitch()
+
+    def _default_filename(self, filename):
+        try:
+            star_name = str(self.session.metadata["OBJECT"]).strip()
+        except (AttributeError, KeyError, TypeError):
+            star_name = ""
+        star_name = re.sub(r'[\\/:*?"<>|]+', "_", star_name).strip(" ._")
+        return "{}_{}".format(star_name, filename) if star_name else filename
 
 
     def __init_menus__(self):
@@ -92,15 +104,6 @@ class Ui_MainWindow(QtGui.QMainWindow):
         file_menu.addSeparator()
 
         file_menu.addAction(open_session)
-        self.open_recent_menu = QtGui.QMenu("Open &recent", self)
-
-
-        # Read recently opened from the default settings path.
-        with open(smh.Session._default_settings_path, "rb") as fp:
-            recently_opened = yaml.load(fp).get("_gui_recently_opened", [])
-
-        self.update_recently_opened(recently_opened)
-        file_menu.addMenu(self.open_recent_menu)
         
         file_menu.addSeparator()
         file_menu.addAction(save_session)
@@ -188,44 +191,13 @@ class Ui_MainWindow(QtGui.QMainWindow):
         export_menu.addAction(self._menu_export_abundance_table)
         export_menu.addAction(self._menu_export_spectral_model_measurements)
 
-        self.statusbar = QtGui.QStatusBar(self)
+        self.statusbar = QtWidgets.QStatusBar(self)
         self._default_statusbar_message = "Spectroscopy Made Harder v{} ({})"\
             .format(smh.__version__, smh.__git_status__)
         self.statusbar.showMessage(self._default_statusbar_message)
         self.setStatusBar(self.statusbar)
 
         return True
-
-
-    def add_to_recently_opened(self, path):
-        """
-        Add the specified path to the recently opened list.
-
-        :param path:
-            The path of the recently opened file to add to the list.
-        """
-
-        with open(smh.Session._default_settings_path, "rb") as fp:
-            default_settings = yaml.load(fp)
-
-        default_settings.setdefault("_gui_recently_opened", [])
-
-        # Only show unique entries.
-        try:
-            default_settings["_gui_recently_opened"].remove(path)
-
-        except ValueError:
-            None
-
-        default_settings["_gui_recently_opened"].insert(0, path)
-        default_settings["_gui_recently_opened"] \
-            = default_settings["_gui_recently_opened"][-5:]
-
-        with open(smh.Session._default_settings_path, "wb") as fp:
-            fp.write(yaml.dump(default_settings))
-
-        self.update_recently_opened(default_settings["_gui_recently_opened"])
-        return None
 
 
 
@@ -236,18 +208,18 @@ class Ui_MainWindow(QtGui.QMainWindow):
         :param event:
             The close event.
         """
-
+        ## TODO in PyQt5 something causes this to display twice sometimes???
 
         if self.session is None:
             # There is no session.
             event.accept()
             return None
 
-        reply = QtGui.QMessageBox.question(self, "Message", 
+        reply = QtWidgets.QMessageBox.question(self, "Message", 
             "Any unsaved changes will be lost. Are you sure you want to quit?", 
-            QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+            QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
 
-        if reply == QtGui.QMessageBox.Yes:
+        if reply == QtWidgets.QMessageBox.Yes:
             event.accept()
         else:
             event.ignore()
@@ -255,50 +227,6 @@ class Ui_MainWindow(QtGui.QMainWindow):
         return None
 
 
-
-    def clear_recently_opened(self):
-        """
-        Clear the recently opened list.
-        """
-
-        with open(smh.Session._default_settings_path, "rb") as fp:
-            default_settings = yaml.load(fp)
-
-        default_settings["_gui_recently_opened"] = []
-        with open(smh.Session._default_settings_path, "wb") as fp:
-            fp.write(yaml.dump(default_settings))
-
-        self.update_recently_opened([])
-        return None
-
-
-    def update_recently_opened(self, paths):
-        """
-        Update the recently opened menu with new entries.
-
-        :param paths:
-            The disk paths of the recently opened sessions.
-        """
-
-        self.open_recent_menu.clear()
-
-        for i, path in enumerate(paths):
-            action = QtGui.QAction(os.path.basename(path), self,
-                triggered=lambda *_: self.open_session(path))
-            self.open_recent_menu.addAction(action)
-
-        if len(paths) == 0:
-            self._no_recent_sessions = QtGui.QAction(
-                "(No recent sessions)", self, triggered=lambda *_: None)
-            self._no_recent_sessions.setEnabled(False)
-            self.open_recent_menu.addAction(self._no_recent_sessions)
-
-        self.open_recent_menu.addSeparator()
-        self.open_recent_menu.addAction(QtGui.QAction("Clear recently opened",
-            self, statusTip="Clear the recently opened sessions",
-            triggered=self.clear_recently_opened))
-
-        return None
 
 
     def new_session(self, filenames=None):
@@ -311,19 +239,21 @@ class Ui_MainWindow(QtGui.QMainWindow):
 
         # Do we already have a session open with unsaved changes?
         if self.session is not None and self.unsaved_session_changes:
-            response = QtGui.QMessageBox.question(self, "Are you sure?",
+            response = QtWidgets.QMessageBox.question(self, "Are you sure?",
                 "You have unsaved changes.\n\n"
                 "Are you sure you want to start a new session?", 
-                QtGui.QMessageBox.StandardButton.Yes \
-                | QtGui.QMessageBox.StandardButton.No)
+                QtWidgets.QMessageBox.StandardButton.Yes \
+                | QtWidgets.QMessageBox.StandardButton.No)
 
-            if not response == QtGui.QMessageBox.Yes:
+            if not response == QtWidgets.QMessageBox.Yes:
                 return
 
         # Get filenames of input spectra.
-        if filenames is None:
-            filenames, selected_filter = QtGui.QFileDialog.getOpenFileNames(
-                self, caption="Select input spectra", dir="")
+        print("filenames:",filenames)
+        if filenames is None or filenames is False:
+            filenames, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
+                self, caption="Select input spectra", dir="", filter="*")
+            print("filenames:",filenames)
             if not filenames:
                 return None
 
@@ -333,7 +263,16 @@ class Ui_MainWindow(QtGui.QMainWindow):
 
         # Import default session settings
         with open(smh.Session._default_settings_path, "rb") as fp:
-            defaults = yaml.load(fp)
+            try:
+                defaults = yaml.load(fp, yaml.FullLoader)
+            except AttributeError:
+                defaults = yaml.load(fp)
+        
+        # Holmbeck: HACKY, but I think ".update" overwrites normalization.
+        if 'normalization' in defaults:
+            normalization = defaults.pop('normalization')
+            self.session.metadata['normalization']['cache'] = normalization
+        
         self.session.metadata.update(defaults)
 
         # TODO: WE SHOULD REMOVE THIS: THE GUI SHOULD READ FROM .SETTINGS()
@@ -391,15 +330,14 @@ class Ui_MainWindow(QtGui.QMainWindow):
     def open_session(self, path=None):
         """ Open existing session. """
 
-        if path is None:
-            path, _ = QtGui.QFileDialog.getOpenFileName(self,
-                caption="Select session", dir="", filter="*.smh")
+        print("Testing path:", path)
+        if path is None or path is False:
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self, caption="Select session", dir="", filter="*.smh")
             if not path: return
+        print("We got:",path)
 
-
-        self.add_to_recently_opened(path)
         self.session_path = path
-
         self.session = smh.Session.load(path)
 
         # Enable relevant menu actions.
@@ -408,7 +346,6 @@ class Ui_MainWindow(QtGui.QMainWindow):
         self.action_comparison_spectrum.setEnabled(True)
         self.action_clear_comparison_spectrum.setEnabled(True)
         self._action_fit_balmer_lines.setEnabled(False)
-
 
         # Refresh GUI of all tabs 
         # TODO does this all work?
@@ -454,8 +391,6 @@ class Ui_MainWindow(QtGui.QMainWindow):
         self.showNormal()
         return None
 
-
-
     def save_session(self):
         """ Save session. """
 
@@ -465,7 +400,6 @@ class Ui_MainWindow(QtGui.QMainWindow):
 
         logger.info("Saving to {}".format(self.session_path))
         self.session.save(self.session_path, overwrite=True)
-        self.add_to_recently_opened(self.session_path)
         return None
 
 
@@ -477,9 +411,10 @@ class Ui_MainWindow(QtGui.QMainWindow):
             The filename where to save the session.
         """
 
-        if path is None:
-            path, _ = QtGui.QFileDialog.getSaveFileName(self,
-                caption="Enter filename", dir="", filter="*.smh")
+        if path is None or path is False:
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+                caption="Enter filename", dir=self._default_filename("session.smh"),
+                filter="SMH session (*.smh);;All files (*)")
             if not path: return
 
         self.session_path = path
@@ -511,7 +446,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
 
         dialog = BalmerLineFittingDialog(spectra,
             observed_spectra_labels=labels, session=self.session)
-        dialog.exec_()
+        dialog.exec()
 
         return None
 
@@ -519,31 +454,37 @@ class Ui_MainWindow(QtGui.QMainWindow):
     def export_normalized_spectrum(self):
         """ Export a normalized, rest-frame spectrum. """
         if self.session is None: return
-        path, _ = QtGui.QFileDialog.getSaveFileName(self,
-            caption="Enter normalized rest frame spectrum filename", dir="", filter="")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+            caption="Enter normalized rest frame spectrum filename",
+            dir=self._default_filename("normalized_spectrum.fits"),
+            filter="FITS spectrum (*.fits);;All files (*)")
         if not path: return
         self.session.export_normalized_spectrum(path)
 
     def export_unnormalized_spectrum(self):
         """ Export a stitched, unnormalized, rest-frame spectrum. """
         if self.session is None: return
-        path, _ = QtGui.QFileDialog.getSaveFileName(self,
-            caption="Enter unnormalized rest frame spectrum filename", dir="", filter="")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+            caption="Enter unnormalized rest frame spectrum filename",
+            dir=self._default_filename("unnormalized_spectrum.fits"),
+            filter="FITS spectrum (*.fits);;All files (*)")
         if not path: return
         self.session.export_unnormalized_spectrum(path)
 
     def export_stitched_continuum(self):
         """ Export a stitched continuum. """
         if self.session is None: return
-        path, _ = QtGui.QFileDialog.getSaveFileName(self,
-            caption="Enter continuum filename", dir="", filter="")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+            caption="Enter continuum filename",
+            dir=self._default_filename("stitched_continuum.fits"),
+            filter="FITS spectrum (*.fits);;All files (*)")
         if not path: return
         self.session.export_stitched_continuum(path)
 
     def print_abundance_table(self):
         """ Print abundance table to console (HACK) """
         summary_dict = self.session.summarize_spectral_models()
-        keys = summary_dict.keys()
+        keys = list(summary_dict.keys())
         keys = np.sort(keys)
         print("species   N logeps  err [X/H] [X/Fe]")
         for key in keys:
@@ -553,15 +494,19 @@ class Ui_MainWindow(QtGui.QMainWindow):
     
     def export_abundance_table(self):
         if self.session is None: return
-        path, _ = QtGui.QFileDialog.getSaveFileName(self,
-            caption="Enter abundance table filename", dir="", filter="")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+            caption="Enter abundance table filename",
+            dir=self._default_filename("abundance_table.txt"),
+            filter="Text table (*.txt);;LaTeX table (*.tex);;All files (*)")
         if not path: return
         self.session.export_abundance_table(path)
     
     def export_spectral_model_measurements(self):
         if self.session is None: return
-        path, _ = QtGui.QFileDialog.getSaveFileName(self,
-            caption="Enter spectral model measurements filename", dir="", filter="")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+            caption="Enter spectral model measurements filename",
+            dir=self._default_filename("spectral_model_measurements.txt"),
+            filter="Text table (*.txt);;All files (*)")
         if not path: return
         self.session.export_spectral_model_measurements(path)
     
@@ -578,7 +523,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
             self.chemical_abundances_tab.new_session_loaded,
             self.review_tab.new_session_loaded
             ])
-        window.exec_()
+        window.exec()
 
         return None
 
@@ -588,7 +533,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
         Open the isotopes manager dialog.
         """
         window = IsotopeDialog(self.session)
-        window.exec_()
+        window.exec()
         return None
 
 
@@ -596,7 +541,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
         """
         Open a dialog to pick comparison spectrum
         """
-        path, _ = QtGui.QFileDialog.getOpenFileName(self,
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self,
             caption="Pick comparison spectrum", dir="", filter="")
         if not path: return
         spectrum = smh.specutils.Spectrum1D.read(path)
@@ -619,7 +564,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
         Make a summary plot in a popup dialog
         """
         window = SummaryPlotDialog(self.session, self)
-        window.exec_()
+        window.exec()
         return None
 
     def ncap_summary_plot(self):
@@ -627,7 +572,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
         Make a ncap summary plot in a popup dialog
         """
         window = SummaryPlotDialog(self.session, self, ncap=True)
-        window.exec_()
+        window.exec()
         return None
 
     def snr_plot(self):
@@ -635,7 +580,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
         Make a snr plot (=1/ivar) in a popup dialog
         """
         window = SNRPlotDialog(self.session, self)
-        window.exec_()
+        window.exec()
         return None
 
     def __init_ui__(self):
@@ -644,19 +589,19 @@ class Ui_MainWindow(QtGui.QMainWindow):
         """
         
         # Create the central widget with a vertical layout.
-        cw = QtGui.QWidget(self)
-        cw_vbox = QtGui.QVBoxLayout(cw)
+        cw = QtWidgets.QWidget(self)
+        cw_vbox = QtWidgets.QVBoxLayout(cw)
         cw_vbox.setContentsMargins(10, 20, 10, 10)
 
 
 
         # Create the primary widget for all the main tabs.
-        self.tabs = QtGui.QTabWidget(cw)
-        self.tabs.setTabPosition(QtGui.QTabWidget.North)
+        self.tabs = QtWidgets.QTabWidget(cw)
+        self.tabs.setTabPosition(QtWidgets.QTabWidget.North)
         self.tabs.setUsesScrollButtons(False)
 
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.tabs.sizePolicy().hasHeightForWidth())
@@ -668,7 +613,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
 
         # Create radial velocity tab
         self.rv_tab = rv.RVTab(self)
-        self.tabs.addTab(self.rv_tab, "Radial velocity")
+        self.tabs.addTab(self.rv_tab, "Radial Velocity")
         
         # Create normalization tab.
         self.normalization_tab = normalization.NormalizationTab(self)
@@ -677,7 +622,7 @@ class Ui_MainWindow(QtGui.QMainWindow):
         # Create stellar parameters tab.
         self.stellar_parameters_tab \
             = stellar_parameters.StellarParametersTab(self)
-        self.tabs.addTab(self.stellar_parameters_tab, "Stellar parameters")
+        self.tabs.addTab(self.stellar_parameters_tab, "Stellar Parameters")
 
         # Create chemical abundances tab
         self.chemical_abundances_tab \

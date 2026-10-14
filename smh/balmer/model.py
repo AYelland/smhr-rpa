@@ -116,12 +116,12 @@ class BalmerLineModel(object):
         usable_paths = []
         for path in paths:
             if not os.path.exists(path):
-                logger.warn("Skipping path '{}' because it does not exist."\
+                logger.warning("Skipping path '{}' because it does not exist."\
                     .format(path))
                 continue
 
             elif self._minimum_valid_model_file_size >= os.stat(path).st_size:
-                logger.warn(
+                logger.warning(
                     "Skipping path '{}' because it is a nearly-empty file."\
                     .format(path))
                 continue

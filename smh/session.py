@@ -15,9 +15,11 @@ import os
 import sys
 import tarfile
 import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedSeq, CommentedMap
+
 import time
-from six import string_types, iteritems
-from six.moves import cPickle as pickle
+import pickle
 from shutil import copyfile, rmtree
 #from tempfile import mkdtemp
 from copy import deepcopy
@@ -36,7 +38,82 @@ from .optimize_stellar_params import optimize_feh as run_optimize_feh
 
 logger = logging.getLogger(__name__)
 
+_yaml = YAML()
+_yaml.preserve_quotes = True
+_yaml.indent(mapping=2, sequence=4, offset=2)
 
+def _to_commented(value):
+    """
+    Recursively convert a plain Python dict/list structure into
+    CommentedMap/CommentedSeq objects, so that ruamel.yaml can apply
+    proper formatting (flow style for coordinate pairs, block style
+    for containers) even to brand-new entries that have no prior
+    formatting metadata to inherit.
+    """
+    if isinstance(value, dict):
+        cm = CommentedMap()
+        for k, v in value.items():
+            cm[k] = _to_commented(v)
+        return cm
+
+    elif isinstance(value, (list, tuple)):
+        items = [_to_commented(v) for v in value]
+        seq = CommentedSeq(items)
+        # If every item is a scalar (not a nested list/dict), treat
+        # this as a "coordinate pair"-style list and render it as
+        # flow style, e.g. [7593.0, 7618.0].
+        if all(not isinstance(v, (list, dict, CommentedSeq, CommentedMap))
+               for v in items):
+            seq.fa.set_flow_style()
+        return seq
+
+    else:
+        return value
+
+def _deep_update(target, source):
+    if isinstance(target, dict) and isinstance(source, dict):
+        for key in list(target.keys()):
+            if key not in source:
+                del target[key]
+        for key, value in source.items():
+            if (key in target
+                    and isinstance(target[key], dict)
+                    and isinstance(value, dict)):
+                _deep_update(target[key], value)
+            elif (key in target
+                    and isinstance(target[key], list)
+                    and isinstance(value, list)):
+                _deep_update_list(target[key], value)
+            else:
+                # New key, or type mismatch: build a fully-formatted
+                # replacement rather than assigning raw plain Python data.
+                target[key] = _to_commented(value)
+        return target
+
+    return source
+
+def _deep_update_list(target_list, source_list):
+    n = min(len(target_list), len(source_list))
+    for i in range(n):
+        tgt_item, src_item = target_list[i], source_list[i]
+        if isinstance(tgt_item, list) and isinstance(src_item, (list, tuple)):
+            m = min(len(tgt_item), len(src_item))
+            for j in range(m):
+                tgt_item[j] = src_item[j]
+            if len(src_item) > len(tgt_item):
+                tgt_item.extend(_to_commented(v) for v in src_item[len(tgt_item):])
+            elif len(src_item) < len(tgt_item):
+                del tgt_item[len(src_item):]
+        else:
+            target_list[i] = _to_commented(src_item)
+
+    # New items appended wholesale.
+    for src_item in source_list[len(target_list):]:
+        target_list.append(_to_commented(src_item))
+
+    if len(source_list) < len(target_list):
+        del target_list[len(source_list):]
+        
 class BaseSession(object):
     """
     An abstract class for a SMH session.
@@ -50,8 +127,9 @@ class Session(BaseSession):
     """
 
     # The default settings path is only defined (hard-coded) here.
-    _default_settings_path = os.path.expanduser("~/.smh_session.defaults")
-
+    # _default_settings_path = os.path.expanduser("./smh/default_session.yaml")
+    _default_settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "default_session.yaml")
+    
     def __init__(self, spectrum_paths, twd=None, from_load=False, **kwargs):
         """
         Create a new session from input spectra.
@@ -60,7 +138,7 @@ class Session(BaseSession):
             Filename of a single spectrum, or an iterable of spectrum filenames.
         """
 
-        if isinstance(spectrum_paths, string_types):
+        if isinstance(spectrum_paths, str):
             spectrum_paths = (spectrum_paths, )
 
         if twd is None:
@@ -157,7 +235,7 @@ class Session(BaseSession):
             # Construct any default spectral models.
             deconstructed_spectral_models = self.setting(("default_spectral_models", ))
             if deconstructed_spectral_models is not None:
-                logger.warn("default_spectral_models is not implemented (skipping)")
+                logger.warning("default_spectral_models is not implemented (skipping)")
 
         return None
 
@@ -206,29 +284,21 @@ class Session(BaseSession):
             "input_spectra": list(map(os.path.basename, twd_paths))
         }
 
-
         def safe_path(path, twd, metadata):
             """
             Function to ensure that we don't have filename clashes in the
             temporary working directory.
             """
-
             basename = os.path.basename(path)
-            existing_paths = np.hstack(metadata["reconstruct_paths"].values())
-
+            existing_paths = np.hstack(list(metadata["reconstruct_paths"].values()))
             if basename in existing_paths:
-
                 while basename in existing_paths:
                     basename = ".".join([
                         utils.random_string(), os.path.basename(path)])
-
                 new_path = os.path.join(twd, basename)
-
                 if os.path.exists(path):
                     copyfile(path, new_path)
-
                 return new_path
-
             return path
 
 
@@ -284,7 +354,7 @@ class Session(BaseSession):
             # Go through the key/value pairs and see what can/cannot be
             # saved.
             failed_on = []
-            for key, value in iteritems(metadata):
+            for key, value in metadata.items():
                 try:
                     with open(os.path.join(twd, ".damaged"), "wb") as dfp:
                         pickle.dump([key, value], dfp, protocol)
@@ -306,10 +376,10 @@ class Session(BaseSession):
                 tarball.add(path, arcname=os.path.basename(path))
 
             except:
-                logger.warn(
+                logger.warning(
                     "Cannot save path '{}' to session:".format(path))
 
-                logger.warn(
+                logger.warning(
                     "Continuing to save session without this path "
                     "before raising the issue")
                 failed_paths.append(path)
@@ -339,7 +409,7 @@ class Session(BaseSession):
         """
 
         with open(path, 'rb') as fp:
-            spectral_model_states = pickle.load(fp)
+            spectral_model_states = pickle.load(fp,encoding="latin1")
         spectral_models = self.reconstruct_spectral_models(spectral_model_states)
         self.metadata["spectral_models"].extend(spectral_models)
         return len(spectral_models)
@@ -347,8 +417,8 @@ class Session(BaseSession):
     def export_spectral_model_states(self, path):
         # TODO implement mask saving etc.
         states = [_.__getstate__() for _ in self.spectral_models]
-        with open(path, 'w') as fp:
-            pickle.dump(states)
+        with open(path, 'wb') as fp:
+            pickle.dump(states, fp)
         return True
 
     def reconstruct_spectral_models(self, spectral_model_states):
@@ -376,6 +446,9 @@ class Session(BaseSession):
                 raise ValueError("unrecognized spectral model class '{}'"\
                                      .format(state["type"]))
             model = klass(*args)
+            ## python 2/3 issue
+            if "rt_abundances" in state["metadata"].keys():
+                state["metadata"]["rt_abundances"] = utils._fix_bytes_dict(state["metadata"]["rt_abundances"])
             model.metadata.update(state["metadata"])
             reconstructed_spectral_models.append(model)
             t2 = time.time()-start
@@ -420,7 +493,7 @@ class Session(BaseSession):
 
         # Reconstruct the session, starting with the initial paths.
         with open(os.path.join(twd, "session.pkl"), "rb") as fp:
-            metadata = pickle.load(fp)
+            metadata = pickle.load(fp,encoding="latin1")
 
         # Load in the template spectrum.
         template_spectrum_path \
@@ -444,6 +517,10 @@ class Session(BaseSession):
         # Remove any reconstruction paths.
         metadata.pop("reconstruct_paths")
 
+        # Python 2/3
+        if "isotopes" in metadata:
+            metadata["isotopes"] = utils._fix_bytes_dict(metadata["isotopes"])
+        
         # Update the new session with the metadata.
         session.metadata = metadata
         # A hack to maintain backwards compatibility
@@ -543,8 +620,7 @@ class Session(BaseSession):
         :param key_tree:
             A tuple containing a tree of dictionary keys.
         """
-
-        if isinstance(key_tree, string_types):
+        if isinstance(key_tree, str):
             key_tree = [key_tree]
         
         value = self.metadata
@@ -555,12 +631,12 @@ class Session(BaseSession):
         except KeyError:
             # Check in defaults.
             with open(self._default_settings_path, "rb") as fp:
-                default = yaml.load(fp)
+                default = yaml.safe_load(fp)
 
             try:
                 for key in key_tree:
                     default = default[key]
-            except KeyError:
+            except (KeyError, TypeError) as e:
                 return default_return_value
 
             else:
@@ -568,7 +644,6 @@ class Session(BaseSession):
 
         else:
             return value
-
 
     def update_default_setting(self, key_tree, value):
         """
@@ -581,24 +656,32 @@ class Session(BaseSession):
             The value for the setting.
         """
 
-        # Open the defaults.
-        with open(self._default_settings_path, "rb") as fp:
-            defaults = yaml.load(fp)
-
-        branch = defaults
+        # Open the defaults, preserving comments/formatting.
+        with open(self._default_settings_path, "r") as fp:
+            default = _yaml.load(fp)
+        
+        # Holmbeck: changed "defaults" to "default"
+        branch = default
         for key in key_tree[:-1]:
-            branch.setdefault(key, {})
+            if key not in branch:
+                branch[key] = {}
             branch = branch[key]
-        branch[key_tree[-1]] = value
+
+        last_key = key_tree[-1]
+        existing = branch.get(last_key)
+
+        if isinstance(existing, (dict, list)) and isinstance(value, (dict, list)):
+            # Merge in place instead of wholesale replacement.
+            _deep_update(existing, value)
+        else:
+            # Scalar leaf — direct assignment is safe (doesn't destroy a
+            # container's comments, since nothing nested is being replaced).
+            branch[last_key] = value
 
         with open(self._default_settings_path, "w") as fp:
-            fp.write(yaml.dump(defaults))
+            _yaml.dump(default, fp)
 
         return True
-
-
-
-
 
     def _get_overlap_order(self, wavelength_regions, template_spectrum=None):
         """
@@ -703,7 +786,7 @@ class Session(BaseSession):
             normalization_kwargs = self.setting(("rv", "normalization"))
 
         # Is the template spectrum actually a filename?
-        if isinstance(template_spectrum, string_types):
+        if isinstance(template_spectrum, str):
             self.metadata["rv"]["template_spectrum_path"] = template_spectrum
             template_spectrum = specutils.Spectrum1D.read(template_spectrum,
                 debug=True)
@@ -785,7 +868,9 @@ class Session(BaseSession):
         # -----------------------------------------------------------------
         '''
         # E. Holmbeck: calculate the bcv if it doesn't exist
-        if "barycentric_correction" in self.metadata["rv"]:
+        bcv = self.metadata["rv"].get("barycentric_correction", np.nan)
+        #if "barycentric_correction" in self.metadata["rv"]:
+        if ~np.isnan(bcv):
             return
         
         names = self._input_spectra_paths
@@ -796,8 +881,11 @@ class Session(BaseSession):
                     spectrum = s
                     break
 
-        from astropy.io import fits
-        _, headers = fits.getdata(spectrum, header=True)
+        try:
+            from astropy.io import fits
+            _, headers = fits.getdata(spectrum, header=True)
+        except OSError as e:
+            print("Failure to read FITS headers, will not have heliocentric/barycentric corrections")
 
         # E. Holmbeck added "shift_tellurics"
         try:
@@ -837,6 +925,7 @@ class Session(BaseSession):
     def stitch_and_stack(self, **kwargs):
 
         normalized_orders = []
+        
         for i, (spectrum, continuum) \
         in enumerate(zip(self.input_spectra,
         self.metadata["normalization"]["continuum"])):
@@ -935,12 +1024,12 @@ class Session(BaseSession):
 
     def set_stellar_parameters(self, Teff, logg, vt, MH, alpha=None):
         """ 
-        Set stellar parameters (Teff, logg, MH, vt[, alpha])
+        Set stellar parameters (Teff, logg, vt, MH[, alpha])
         """
         self.metadata["stellar_parameters"]["effective_temperature"] = Teff
         self.metadata["stellar_parameters"]["surface_gravity"] = logg
-        self.metadata["stellar_parameters"]["metallicity"] = MH
         self.metadata["stellar_parameters"]["microturbulence"] = vt
+        self.metadata["stellar_parameters"]["metallicity"] = MH
         if alpha is not None:
             self.metadata["stellar_parameters"]["alpha"] = alpha
         
@@ -948,13 +1037,13 @@ class Session(BaseSession):
         
     def set_stellar_parameters_errors(self, sysstat, dTeff, dlogg, dvt, dMH):
         """ 
-        Set stellar parameter errors (sys/stat, Teff, logg, MH, vt)
+        Set stellar parameter errors (sys/stat, Teff, logg, vt, MH)
         """
         assert sysstat in ["sys","stat"], sysstat
         self.metadata["stellar_parameters"][sysstat+"err_effective_temperature"] = dTeff
         self.metadata["stellar_parameters"][sysstat+"err_surface_gravity"] = dlogg
-        self.metadata["stellar_parameters"][sysstat+"err_metallicity"] = dMH
         self.metadata["stellar_parameters"][sysstat+"err_microturbulence"] = dvt
+        self.metadata["stellar_parameters"][sysstat+"err_metallicity"] = dMH
         return None
     
     def stellar_parameter_uncertainty_analysis(self, transitions=None,
@@ -1060,7 +1149,7 @@ class Session(BaseSession):
                 self.metadata["stellar_parameters"] = deepcopy(saved_stellar_params)
                 logger.info("Teff: {} + {}".format(Teff, Teff_error))
             except:
-                logger.warn("Error calculating uncertainties in Teff")
+                logger.warning("Error calculating uncertainties in Teff")
                 raise
 
             # logg
@@ -1096,7 +1185,7 @@ class Session(BaseSession):
                 self.metadata["stellar_parameters"] = deepcopy(saved_stellar_params)
                 logger.info("logg: {:.2f} + {:.2f}".format(logg, logg_error))
             except:
-                logger.warn("Error calculating uncertainties in logg")
+                logger.warning("Error calculating uncertainties in logg")
                 raise
 
             # vt
@@ -1121,7 +1210,7 @@ class Session(BaseSession):
                 self.metadata["stellar_parameters"] = deepcopy(saved_stellar_params)
                 logger.info("vt: {:.2f} + {:.2f}".format(vt, vt_error))
             except:
-                logger.warn("Error calculating uncertainties in vt")
+                logger.warning("Error calculating uncertainties in vt")
                 raise
 
         except Exception as e:
@@ -1134,8 +1223,8 @@ class Session(BaseSession):
                     Teff_error, logg_error, vt_error, mh_error, time.time()-start))
             if systematic_errors is not None:
                 if len(systematic_errors) != 4:
-                    logger.warn("Systematic errors are not length 4! {}".format(systematic_errors))
-                    logger.warn("Skipping...")
+                    logger.warning("Systematic errors are not length 4! {}".format(systematic_errors))
+                    logger.warning("Skipping...")
                 else:
                     self.set_stellar_parameters_errors("sys",
                                                        systematic_errors[0], systematic_errors[1],
@@ -1233,7 +1322,7 @@ class Session(BaseSession):
             if model.is_acceptable and isinstance(model, ProfileFittingModel) and (not model.is_upper_limit):
                 eqw_models.append(model)
         
-        all_species = np.unique(map(lambda m: m.species[0], eqw_models))
+        all_species = np.unique(list(map(lambda m: m.species[0], eqw_models)))
         all_ratios = []
         for _s1 in all_species:
             for _s2 in all_species:
@@ -1460,6 +1549,7 @@ class Session(BaseSession):
         """
         
         Teff, logg, vt, MH = self.stellar_parameters
+        alpha = self.metadata["stellar_parameters"]["alpha"]
         initial_guess = [Teff, vt, logg, MH] # stupid me did not change the ordering to match
         logger.info("Initializing optimization at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
             Teff, logg, vt, MH))
@@ -1474,7 +1564,7 @@ class Session(BaseSession):
         transitions = self._spectral_models_to_transitions(stellar_parameter_spectral_models)
         finite = np.logical_and(np.isfinite(transitions["equivalent_width"]), transitions["equivalent_width"] > 0.01)
         if finite.sum() != len(finite):
-            logger.warn("Number of finite transitions ({}) != number of transitions ({})".format(
+            logger.warning("Number of finite transitions ({}) != number of transitions ({})".format(
                 finite.sum(), len(finite)))
         transitions = transitions[finite]
         logger.info("Optimizing with {} transitions".format(len(transitions)))
@@ -1485,7 +1575,7 @@ class Session(BaseSession):
         new_Teff, new_vt, new_logg, new_MH = final_parameters
         
         if not out[0]:
-            logger.warn("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
+            logger.warning("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
                 new_Teff, new_logg, new_vt, new_MH))
             
         
@@ -1515,7 +1605,7 @@ class Session(BaseSession):
         transitions = self._spectral_models_to_transitions(stellar_parameter_spectral_models)
         finite = np.logical_and(np.isfinite(transitions["equivalent_width"]), transitions["equivalent_width"] > 0.01)
         if finite.sum() != len(finite):
-            logger.warn("Number of finite transitions ({}) != number of transitions ({})".format(
+            logger.warning("Number of finite transitions ({}) != number of transitions ({})".format(
                 finite.sum(), len(finite)))
         transitions = transitions[finite]
         logger.info("Optimizing with {} transitions".format(len(transitions)))
@@ -1526,7 +1616,7 @@ class Session(BaseSession):
         new_Teff, new_vt, new_logg, new_MH = final_parameters
         
         if not out[0]:
-            logger.warn("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
+            logger.warning("Optimization did not converge, stopped at Teff={:.0f} logg={:.2f} vt={:.2f} MH={:.2f}".format(
                 new_Teff, new_logg, new_vt, new_MH))
             
         
@@ -1627,7 +1717,7 @@ class Session(BaseSession):
     
     
     def summarize_spectral_models(self, spectral_models=None, organize_by_element=False,
-                                  use_weights = None, use_finite = True, what_fe = 1,
+                                  use_weights = False, use_finite = True, what_fe = 1,
                                   default_error = 0.1):
         """
         Loop through all spectral_models and return a summary dict
@@ -1641,15 +1731,16 @@ class Session(BaseSession):
             If False (default), key is species (without isotopes)
             If True, key is element (sum all species together)
         :param use_weights:
-            If True, use line-by-line weights
-            If False, weight all lines equally
-            Defaults to session settings
+            If True, use line-by-line weights (was default before to 2023-03-05 but was hard for people to understand so changed)
+            If False (default), weight all lines equally
         :param use_finite:
             If True (default), only use finite abundances
             If False, use any acceptable abundances
             I cannot imagine why you'd set it to False unless debugging
         :param what_fe:
             1 or 2 depending on Fe I or Fe II
+            # Holmbeck added:
+            If None, use I or II depending on the ionization state of the species X.
         """
         what_key_type = "element" if organize_by_element else "species"
 
@@ -1776,7 +1867,7 @@ class Session(BaseSession):
     def _export_ascii_abundance_table(self, filepath, summary_dict):
         out = np.zeros((len(summary_dict), 7))
         for i,(species, (N, logeps, stdev, stderr, XH, XFe)) in \
-                enumerate(iteritems(summary_dict)):
+                enumerate(summary_dict.items()):
             out[i,:] = [species, N, logeps, stdev, stderr, XH, XFe]
         names = ["species", "N", "logeps", "stdev", "stderr", "[X/H]", "[X/Fe]"]
         tab = astropy.table.Table(out, names=names)
@@ -1795,10 +1886,13 @@ class Session(BaseSession):
         ## We'll eventually put in upper limits too.
         spectral_models = self.metadata.get("spectral_models", [])
         # Erika added EW sigma to output
-        linedata = np.zeros((len(spectral_models), 8)) + np.nan
+        names=["species", "wavelength", "expot", "loggf", "EW", "e_EW", "logeps", "e_logeps"]
+        dtypes=[(name, "f4") for name in names[:7]] + [(names[7], "U10")]
+        # Convoluted, but we need to be able to print out upper limits
+        linedata = np.array(np.zeros(len(spectral_models)) + np.nan, dtype=dtypes)
         for i,spectral_model in enumerate(spectral_models):
             # TODO include upper limits
-            if not spectral_model.is_acceptable or spectral_model.is_upper_limit: continue
+            if not spectral_model.is_acceptable: continue# or not spectral_model.is_upper_limit: continue
             if isinstance(spectral_model, SpectralSynthesisModel):
                 assert len(spectral_model.elements) == 1, spectral_model.elements
                 wavelength = spectral_model.wavelength
@@ -1808,10 +1902,13 @@ class Session(BaseSession):
                 EW = np.nan
                 e_EW = np.nan
                 logeps = spectral_model.abundances[0]
-                try:
-                    logeps_err = spectral_model.metadata["2_sigma_abundance_error"]/2.0
-                except:
-                    logeps_err = np.nan
+                if spectral_model.is_upper_limit:
+                    logeps_err = "<"
+                elif "2_sigma_abundance_error" in spectral_model.metadata:
+                    logeps_err = f"{spectral_model.metadata['2_sigma_abundance_error']/2.0:6.3f}"
+                else:
+                    logeps_err = "nan"
+                #print("exporting synth",wavelength,species)
             elif isinstance(spectral_model, ProfileFittingModel):
                 line = spectral_model.transitions[0]
                 wavelength = line['wavelength']
@@ -1824,22 +1921,30 @@ class Session(BaseSession):
                     # Erika added EW sigma to output
                     e_EW = max(1000.*np.abs(spectral_model.metadata["fitted_result"][2]["equivalent_width"][1:]))
                     logeps = spectral_model.abundances[0]
-                    logeps_err = spectral_model.abundance_uncertainties or np.nan
+                    logeps_err = f"{spectral_model.abundance_uncertainties or np.nan:6.3f}"
                 except Exception as e:
                     print(e)
                     EW = np.nan
                     e_EW = np.nan
                     logeps = np.nan
-                    logeps_err = np.nan
+                    logeps_err = "nan"
                 if EW is None: EW = np.nan
                 if logeps is None: logeps = np.nan
             else:
                 raise NotImplementedError
             # Erika added EW sigma to output
-            linedata[i,:] = [species, wavelength, expot, loggf, EW, e_EW, logeps, logeps_err]
+            try:
+                linedata[i] = tuple([species, wavelength, expot, loggf, EW, e_EW, logeps, logeps_err])
+            except:
+                import pdb
+                pdb.set_trace()
+
+        # This was an extra check for bad lines/upper limits
         #ii_bad = np.logical_or(np.isnan(linedata[:,5]), np.isnan(linedata[:,4]))
-        ii_bad = np.isnan(linedata[:,5])
-        linedata = linedata[~ii_bad,:]
+        #ii_bad = np.isnan(linedata[:,6]) # Used to be 5.
+        #linedata = linedata[~ii_bad,:]
+        ii_bad = np.isnan(linedata['logeps'])
+        linedata = np.delete(linedata, ii_bad)
         if len(linedata) == 0:
             raise RuntimeError("No lines have abundances measured!")
 
@@ -1853,7 +1958,8 @@ class Session(BaseSession):
         raise NotImplementedError
     def _export_ascii_measurement_table(self, filepath, linedata):
         # Erika added EW sigma to output
-        names = ["species", "wavelength", "expot", "loggf", "EW", "e_EW", "logeps", "e_logeps"]
+        #names = ["species", "wavelength", "expot", "loggf", "EW", "e_EW", "logeps", "e_logeps"]
+        names = linedata.dtype.names
         tab = astropy.table.Table(linedata, names=names)
         tab.sort(["species","wavelength","expot"])
         tab["wavelength"].format = ".3f"
@@ -1862,29 +1968,29 @@ class Session(BaseSession):
         tab["EW"].format = "6.2f"
         tab["e_EW"].format = "6.2f"
         tab["logeps"].format = "6.3f"
-        tab["e_logeps"].format = "6.3f"
+        #tab["e_logeps"].format = "s"
         tab.write(filepath, format="ascii.fixed_width_two_line")
         return True
 
     def make_summary_plot(self, figure=None):
         with open(self._default_settings_path, "rb") as fp:
-            defaults = yaml.load(fp)
+            defaults = yaml.safe_load(fp)
         if "summary_figure" not in defaults:
             raise RuntimeError("Defaults file ({}) must have summary_figure".format(\
                     self._default_settings_path))
         if not isinstance(self.normalized_spectrum, specutils.Spectrum1D):
-            logger.warn("Must have normalized spectrum to make summary plot")
+            logger.warning("Must have normalized spectrum to make summary plot")
             return None
         return smh_plotting.make_summary_plot(defaults["summary_figure"],
                                        self.normalized_spectrum, figure)
     def make_ncap_summary_plot(self, figure=None):
         with open(self._default_settings_path, "rb") as fp:
-            defaults = yaml.load(fp)
+            defaults = yaml.safe_load(fp)
         if "summary_figure_ncap" not in defaults:
-            raise RuntimeError("Defaults file ({}) must have summary_figure".format(\
+            raise RuntimeError("Defaults file ({}) must have summary_figure_ncap".format(\
                     self._default_settings_path))
         if not isinstance(self.normalized_spectrum, specutils.Spectrum1D):
-            logger.warn("Must have normalized spectrum to make summary plot")
+            logger.warning("Must have normalized spectrum to make neutron capture summary plot")
             return None
         return smh_plotting.make_summary_plot(defaults["summary_figure_ncap"],
                                        self.normalized_spectrum, figure)
@@ -2003,8 +2109,10 @@ class Session(BaseSession):
 
         master_list = ascii.read(filename, **kwargs).filled()
         logger.debug(master_list)
-        types = np.array(map(lambda x: x.lower(), np.array(master_list["type"])))
-        assert np.all(map(lambda x: (x=="eqw") or (x=="syn") or (x=="list"), types)), types
+        print(master_list["type"])
+        types = np.array(list(map(lambda x: x.lower(), np.array(master_list["type"]))))
+        print(types)
+        assert np.all([(x=="eqw") or (x=="syn") or (x=="list") for x in types]), types
 
         num_added = 0
 
@@ -2033,8 +2141,8 @@ class Session(BaseSession):
                 else:
                     ll = LineList.read(_filename)
             except Exception as e:
-                logger.warn("Could not import {}".format(_filename))
-                logger.warn(e)
+                logger.warning("Could not import {}".format(_filename))
+                logger.warning(e)
             else:
                 spectral_models_to_add = []
                 for i in range(len(ll)):
@@ -2062,6 +2170,12 @@ class Session(BaseSession):
                 if elem1 == "C" and elem2 == "N":
                     element = ["N"]
                     logger.debug("Hardcoded element: CN->N")
+                if elem1 == "H" and elem2 == "N":
+                    element = ["N"]
+                    logger.debug("Hardcoded element: NH->N")
+                if elem1 == "H" and elem2 == "O":
+                    element = ["O"]
+                    logger.debug("Hardcoded element: OH->O")
             _filename = row["filename"]
             what_wavelength = row['wavelength']
             what_species = [row['species']]
@@ -2076,15 +2190,15 @@ class Session(BaseSession):
                                                         copy_to_working_dir=copy_to_working_dir,
                                                         **kwargs)
             except Exception as e:
-                logger.warn("Could not import {}".format(_filename))
-                logger.warn(e)
+                logger.warning("Could not import {}".format(_filename))
+                logger.warning(e)
             else:
                 num_added += 1
                 if copy_to_working_dir:
                     self.copy_file_to_working_directory(_filename)
         
         if num_added != len(master_list):
-            logger.warn("Created {} models out of {} in the master list".format(
+            logger.warning("Created {} models out of {} in the master list".format(
                     num_added, len(master_list)))
 
         if copy_to_working_dir:
@@ -2129,7 +2243,36 @@ class Session(BaseSession):
                     warnings.warn("Spectral model has multiple species: {}".format(model.species))
                 species = round(model.species[0][0],1)
             # Use setdefault instead of get, not sure why it has to be this way
-	    species_models = all_models.setdefault(species, [])
-	    species_models.append(model)
+            species_models = all_models.setdefault(species, [])
+            species_models.append(model)
         return all_models
     
+    def initialize_normalization(self):
+        N = len(self.input_spectra)
+        self.metadata["normalization"] = {
+            "continuum": [None] * N,
+            "normalization_kwargs": [{}] * N
+        }
+
+    def initialize_rv(self):
+        """
+        Set things up so the RV GUI doesn't error out
+        """
+        wavelength_region = self.setting(("rv", "wavelength_regions"))
+        resample = self.setting(("rv", "resample"))
+        apodize = self.setting(("rv", "apodize"))
+        normalization_kwargs = self.setting(("rv", "normalization"))
+        
+        template_spectrum_path = self.setting(("rv", "template_spectrum"))
+        template_spectrum = specutils.Spectrum1D.read(template_spectrum_path)
+        
+        self.metadata["rv"].update({
+            # Input settings
+            "template_spectrum_path": template_spectrum_path,
+            "template_spectrum": template_spectrum,
+            "wavelength_region": wavelength_region,
+            "resample": resample,
+            "apodize": apodize,
+            "normalization": normalization_kwargs.copy()
+        })
+        

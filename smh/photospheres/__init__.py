@@ -6,8 +6,7 @@
 __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
 import logging
-from pkg_resources import resource_stream
-
+from importlib.resources import files
 
 from .castelli_kurucz import Interpolator as ck_interp
 from .marcs import Interpolator as marcs_interp
@@ -58,14 +57,11 @@ _photospheres = [
 ]
 available = []
 for description, kind, basename in _photospheres:
-
     # Try to open the photosphere grid.
     try:
-        with resource_stream(__name__, basename) as fp:
-            None
-
-    except ValueError:
+        with (files(__name__) / basename).open("rb"):
+            pass
+    except OSError:
         continue
-
     else:
         available.append((description, kind, basename))

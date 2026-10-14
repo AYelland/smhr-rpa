@@ -40,7 +40,7 @@ def _moog_writer(photosphere, filename, **kwargs):
     def _get_xi():
         xi = photosphere.meta["stellar_parameters"].get("microturbulence", 0.0)
         if 0 >= xi:
-            logger.warn("Invalid microturbulence value: {:.3f} km/s".format(xi))
+            logger.warning("Invalid microturbulence value: {:.3f} km/s".format(xi))
         return xi
 
     if photosphere.meta["kind"] == "marcs":

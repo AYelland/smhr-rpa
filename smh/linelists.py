@@ -18,7 +18,7 @@ logger.addHandler(handler)
 
 import os
 
-import md5
+import hashlib
 
 class LineListConflict(Exception):
     """Exception raised for merging conflicts"""
@@ -33,14 +33,14 @@ class LineList(Table):
     full_colnames = ['wavelength','species','expot','loggf','damp_vdw','dissoc_E','comments',
                      'numelems','elem1','isotope1','elem2','isotope2','ion',
                      'E_hi','lande_hi','lande_lo','damp_stark','damp_rad','references','element']
-    full_dtypes = [np.float,np.float,np.float,np.float,np.float,np.float,str,
-                   np.int,str,np.int,str,np.int,np.int,
-                   np.float,np.float,np.float,np.float,np.float,str,str]
+    full_dtypes = [float,float,float,float,float,float,str,
+                   int,str,int,str,int,int,
+                   float,float,float,float,float,str,str]
     moog_colnames = ['wavelength','species','expot','loggf','damp_vdw','dissoc_E','comments',
                      'numelems','elem1','isotope1','elem2','isotope2','ion',
                      'references','element']
-    moog_dtypes = [np.float,np.float,np.float,np.float,np.float,np.float,str,
-                   np.int,str,np.int,str,np.int,np.int,
+    moog_dtypes = [float,float,float,float,float,float,str,
+                   int,str,int,str,int,int,
                    str,str]
 
     def __init__(self,*args,**kwargs):
@@ -132,7 +132,7 @@ class LineList(Table):
         if error:
             raise IOError(error_msg)
         else:
-            logger.warn(error_msg)
+            logger.warning(error_msg)
         return False
 
     @staticmethod
@@ -272,7 +272,7 @@ class LineList(Table):
 
         if ignore_conflicts:
             if self.verbose:
-                logger.warn("Ignoring conflicts: adding {} lines".format(len(new_ll)))
+                logger.warning("Ignoring conflicts: adding {} lines".format(len(new_ll)))
             if not in_place:
                 return table.vstack([self, new_ll])
             else:
@@ -442,7 +442,8 @@ class LineList(Table):
     def hash(line):
         s = "{:.3f}_{:.3f}_{:.3f}_{}_{}_{}_{}_{}".format(line['wavelength'],line['expot'],line['loggf'],
                                                          line['elem1'],line['elem2'],line['ion'],line['isotope1'],line['isotope2'])
-        return md5.new(s).hexdigest()
+        #return md5.new(s).hexdigest()
+        return hashlib.md5(s.encode("utf-8")).hexdigest()
 
     @staticmethod
     def lines_equal(l1,l2,dwl_thresh=.001,dEP_thresh=.01,dgf_thresh=.001):
@@ -498,7 +499,7 @@ class LineList(Table):
         data = [wavelength, species, expot, loggf, nans, nans, empty,
                 numelems, elem1, isotope1, elem2, isotope2, ion, empty, elements, nans]
         columns = cls.moog_colnames + ['equivalent_width']
-        dtypes = cls.moog_dtypes + [np.float]
+        dtypes = cls.moog_dtypes + [float]
 
         return cls(Table(data, names=columns, dtype=dtypes), moog_columns=True, **kwargs)
 
@@ -549,7 +550,7 @@ class LineList(Table):
         for i,line in enumerate(lines):
             s = line.split()
             try:
-                _wl,_species,_EP,_loggf = map(float,s[:4])
+                _wl,_species,_EP,_loggf = list(map(float,s[:4]))
             except:
                 if i==0:
                     has_header_line = True
@@ -583,7 +584,7 @@ class LineList(Table):
         #if np.all(loggf >= 0): 
         #    loggf = np.log10(loggf)
         #    # TODO this is the MOOG default, but it may not be a good idea...
-        #    logger.warn("MOOG: no lines with loggf < 0 in {}, assuming input is gf".format(filename))
+        #    logger.warning("MOOG: no lines with loggf < 0 in {}, assuming input is gf".format(filename))
         
         # TODO
         # Cite the filename as the reference for now
@@ -627,7 +628,9 @@ class LineList(Table):
         #if not np.all(np.isnan(ew)):
         #    print("Read {} EWs out of {} lines".format(np.sum(~np.isnan(ew)),len(ew)))
         colnames = colnames + ['equivalent_width']
-        dtypes = dtypes + [np.float]
+        # E. Holmbeck removed the second float thing; why was this here..?
+        # dtypes = dtypes + [np.float32]
+        dtypes = dtypes + [float]
         data = data + [ew]
         
         return cls(Table(data,names=colnames,dtype=dtypes),moog_columns=moog_columns,**kwargs)
@@ -663,7 +666,7 @@ class LineList(Table):
             return species
         import time
         start = time.time()
-        species = map(_get_species, tab)
+        species = list(map(_get_species, tab))
         print('{:.1f}s to compute species'.format(time.time()-start))
 
         memo = {}
@@ -672,7 +675,7 @@ class LineList(Table):
             element = species_to_element(species)
             memo[species] = element
             return element
-        elements = map(_get_element, species)
+        elements = list(map(_get_element, species))
 
         expot = tab['E_LOW']
         loggf = tab['LOG_GF']

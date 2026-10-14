@@ -17,7 +17,7 @@ __all__ = ["celestial_velocities", "corrections", "corrections_from_headers"]
 import logging
 #import yaml
 import json
-from pkg_resources import resource_stream
+from importlib.resources import files
 
 import numpy as np
 import astropy.constants as constants
@@ -400,6 +400,8 @@ def corrections_from_headers(headers):
     :type headers:
         A dictionary-like object.
     """
+    # WARNING: VERY HACKY!
+    
     alt_obs = headers.get("ALT_OBS", headers.get("SITEALT", None))
     lat_obs = headers.get("LAT_OBS", headers.get("SITELAT", None))
     long_obs = headers.get("LONG_OBS", headers.get("SITELONG", None))
@@ -417,8 +419,8 @@ def corrections_from_headers(headers):
         #with resource_stream(__name__, "observatories.yaml") as fp:
         #    observatories_dictionary = yaml.load(fp)
         # E. Holmbeck changed this from yaml to json
-        with resource_stream(__name__, "sites.json") as fp:
-            observatories_dictionary = json.load(fp)
+        observatories_dictionary = json.loads(
+            (files(__package__) / "sites.json").read_text(encoding="utf-8"))
 
         origin = origin.strip().lower()
         if origin not in observatories_dictionary:
@@ -428,7 +430,7 @@ def corrections_from_headers(headers):
         observatory = observatories_dictionary[origin]
         alt_obs = observatory["elevation"]
         lat_obs = observatory["latitude"]
-
+    
     # Get the RA/DEC.
     ra = headers.get("RA", None) # Assuming degrees
     dec = headers.get("DEC", None)
@@ -446,11 +448,16 @@ def corrections_from_headers(headers):
     # Try to get the mid-point directly.
     try:
         mjd = Time("{0}T{1}".format(headers["UTMID"], headers["UT-MID"])).mjd
-
-    except (IndexError, KeyError):
+    except KeyError:
+        try:
+            mjd = Time("{0}T{1}".format(headers["DATE-OBS"], headers["UT-MID"])).mjd
+        except KeyError:
+            mjd = None
+        
+    #except (IndexError, KeyError):
+    if mjd is None:
         # Try and calculate it from UT-START/UT-DATE keys
         #raise
-
         try:
             utdate_key = [_ for _ in ("UT-DATE", "DATE-OBS") if _ in headers][0]
             if 'T' in headers[utdate_key]:
@@ -465,33 +472,28 @@ def corrections_from_headers(headers):
                         headers[utstart_key]), format="isot", scale="utc")
             
         except IndexError:
-            raise KeyError("cannot find all time keys: UTSTART/UTDATE")          
+            raise KeyError("cannot find time keys: UTSTART/UTDATE")          
 
         try:
             utend_key = [_ for _ in ("UTEND", "UT-END") if _ in headers][0]
+            try:
+                ut_end = Time("{0}T{1}".format(headers[utdate_key].replace(":", "-"),
+                    headers[utend_key]), format="isot", scale="utc")
+            except:
+                ut_end = Time("{0}T{1}".format(headers[utdate_key].replace("/", "-"),
+                    headers[utend_key]), format="isot", scale="utc")
         except IndexError:
             try:
                 exp_time = headers['EXPTIME']
+                ut_end = ut_start + (exp_time)*u.s
             except:
                 mjd = ut_start.mjd
                 logging.warn(
                     "Calculating celestial corrections based on the UT-START only")
-
         try:
-            ut_end = Time("{0}T{1}".format(headers[utdate_key].replace(":", "-"),\
-                headers[utend_key]), format="isot", scale="utc")
-        except:
-            try:
-                ut_end = Time("{0}T{1}".format(headers[utdate_key].replace("/", "-"),\
-                    headers[utend_key]), format="isot", scale="utc")
-            except:
-                ut_end = ut_start + (exp_time)*u.s
-
-		# Get the MJD of the mid-point of the observation.
-        try:
-            mjd
-        except:
             mjd = (ut_end - ut_start).jd/2 + ut_start.mjd
+        except:
+            mjd
 
     # Calculate the correction.
     # ---------------------------------------------------------------------

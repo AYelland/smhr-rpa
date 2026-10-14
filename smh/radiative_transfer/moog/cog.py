@@ -13,7 +13,7 @@ import logging
 import numpy as np
 import re
 import yaml
-from pkg_resources import resource_stream
+from importlib.resources import files
 
 from . import utils
 from .utils import RTError
@@ -23,8 +23,13 @@ from smh import linelists
 logger = logging.getLogger(__name__)
 
 # Load the MOOG defaults.
-with resource_stream(__name__, "defaults.yaml") as fp:
-    _moog_defaults = yaml.load(fp)
+# with resource_stream(__name__, "defaults.yaml") as fp:
+#     try:
+#         _moog_defaults = yaml.load(fp, yaml.FullLoader)
+#     except AttributeError:
+#         _moog_defaults = yaml.load(fp)
+_moog_defaults = yaml.safe_load(
+    (files(__package__) / "defaults.yaml").read_text())
 
 def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     twd=None, **kwargs):
@@ -66,8 +71,7 @@ def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     transitions.write(lines_in, format="moog")
     
     # Load the abfind driver template.
-    with resource_stream(__name__, "abfind.in") as fp:
-        template = fp.read()
+    template = (files(__package__) / "abfind.in").read_text(encoding="utf-8")
 
     # Not these are SMH defaults, not MOOG defaults.
     kwds = _moog_defaults.copy()
@@ -157,8 +161,12 @@ def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     #raise NotImplementedError
 
 def strip_control_characters(out):
-    for x in np.unique(re.findall(r"\x1b\[K|\x1b\[\d+;1H",out)):
-        out = out.replace(x,'')
+    try:
+        for x in np.unique(re.findall(r"\x1b\[K|\x1b\[\d+;1H",out)):
+            out = out.replace(x,'')
+    except TypeError:
+        for x in np.unique(re.findall(r"\x1b\[K|\x1b\[\d+;1H", out.decode("ascii"))):
+            out = out.replace(x, '')
     return out
 
 def _parse_abfind_summary(summary_out_path):
@@ -204,11 +212,11 @@ def _parse_abfind_summary(summary_out_path):
                 #    abundances = list(np.delete(abundances, exists, axis=0))
             """
             
-        elif re.match("^\s{2,3}[0-9]", line):
+        elif re.match(r"^\s{2,3}[0-9]", line):
             if species is None:
                 raise IOError("Could not find the species!")
                 
-            line = map(float, line.split())
+            line = list(map(float, line.split()))
 
             # July 2014 version of MOOG has an additional column w/ the species
             if len(line) == 7:
@@ -223,9 +231,9 @@ def _parse_abfind_summary(summary_out_path):
         elif 'corr. coeff.' in line:
             line = line.split()
             moog_slopes[species][name_map[line[0].replace('.', '').lower()]] \
-                = map(float, [value.replace('D-', 'E-') for value in \
-                    [line[4], line[7], line[11]]])
+                = list(map(float, [value.replace('D-', 'E-') for value in \
+                    [line[4], line[7], line[11]]]))
             
-    transitions_array = np.array(abundances, dtype=np.float).reshape((-1, 8))
+    transitions_array = np.array(abundances, dtype=float).reshape((-1, 8))
 
     return (transitions_array, moog_slopes)

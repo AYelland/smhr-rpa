@@ -10,16 +10,20 @@ from __future__ import (division, print_function, absolute_import,
 import logging
 import numpy as np
 import yaml
-from pkg_resources import resource_stream
+from importlib.resources import files
 
 from . import utils
 
 logger = logging.getLogger(__name__)
 
 # Load the MOOG defaults.
-with resource_stream(__name__, "defaults.yaml") as fp:
-    _moog_defaults = yaml.load(fp)
-
+# with resource_stream(__name__, "defaults.yaml") as fp:
+#     try:
+#         _moog_defaults = yaml.load(fp, yaml.FullLoader)
+#     except AttributeError:
+#         _moog_defaults = yaml.load(fp)
+_moog_defaults = yaml.safe_load(
+    (files(__package__) / "defaults.yaml").read_text())
 
 def synthesize(photosphere, transitions, abundances=None, isotopes=None,
     verbose=False, twd=None, **kwargs):
@@ -41,17 +45,22 @@ def synthesize(photosphere, transitions, abundances=None, isotopes=None,
 
     :param verbose: [optional]
         Specify verbose flags to MOOG. This is primarily used for debugging.
+
+    Note: to turn on stronglines (stronglines_in, strong=1), pass in stronglines=<LineList>
     """
 
     # Create a temporary directory and write out the photoshere and transitions.
     path = utils.twd_path(twd=twd,**kwargs)
     model_in, lines_in = path("model.in"), path("lines.in")
+    stronglines_in = path("strong.in")
     photosphere.write(model_in, format="moog")
     transitions.write(lines_in, format="moog")
+    if "stronglines" in kwargs:
+        kwargs["stronglines"].write_moog(stronglines_in, first_line_blank=False)
+        kwargs["strong"] = 1
     
     # Load the synth driver template.
-    with resource_stream(__name__, "synth.in") as fp:
-        template = fp.read()
+    template = (files(__package__) / "synth.in").read_text(encoding="utf-8")
 
     # Not these are SMH defaults, not MOOG defaults.
     kwds = _moog_defaults.copy()
@@ -92,8 +101,9 @@ def synthesize(photosphere, transitions, abundances=None, isotopes=None,
         "summary_out": path("synth.sum.out"),
         "model_in": model_in,
         "lines_in": lines_in,
+        "stronglines_in": stronglines_in,
     })
-
+    
     # Put this into a while loop only in case we have to iteratively check for
     # edge effects due to syn_contribute
     while True:

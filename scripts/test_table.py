@@ -3,18 +3,18 @@ import sys
 import numpy as np
 import pdb
 
-class MyTableView(QtGui.QTableView):
+class MyTableView(QtWidgets.QTableView):
     def __init__(self, parent=None, *args):
         super(MyTableView, self).__init__(parent, *args)
         self.parent = parent
         #self.setStyleSheet("QItem { font-size: 10px; }")
-        self.verticalHeader().setResizeMode(QtGui.QHeaderView.Fixed)
+        self.verticalHeader().setResizeMode(QtWidgets.QHeaderView.Fixed)
         self.verticalHeader().setDefaultSectionSize(20)
         #self.resizeColumnsToContents()
         #self.resizeRowsToContents()
         #self.setStyleSheet("QTableView::item { border: 0px; }")
 
-class MyCheckboxDelegate(QtGui.QStyledItemDelegate):
+class MyCheckboxDelegate(QtWidgets.QStyledItemDelegate):
     """ http://stackoverflow.com/questions/3363190/qt-qtableview-how-to-have-a-checkbox-only-column """
     def createEditor(self, parent, option, index):
         return None
@@ -37,12 +37,12 @@ class MyTableModel(QtCore.QAbstractTableModel):
             if role == QtCore.Qt.CheckStateRole:
                 return QtCore.Qt.Checked if self._checked[row] else QtCore.Qt.Unchecked
             elif role==QtCore.Qt.FontRole:
-                return QtGui.QFont("Helvetica Neue", 10)
+                return QtWidgets.QFont("Helvetica Neue", 10)
             else:
                 return None
         column = column - 1
         if role==QtCore.Qt.FontRole:
-            return QtGui.QFont("Helvetica Neue", 10)
+            return QtWidgets.QFont("Helvetica Neue", 10)
         return self._data[row,column] if role == QtCore.Qt.DisplayRole else None
     def setData(self, index, value, role=QtCore.Qt.DisplayRole):
         print value
@@ -81,7 +81,7 @@ class MyTableModel(QtCore.QAbstractTableModel):
         return self._data.shape[1] + 1
     
 if __name__=="__main__":
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     if sys.platform == "darwin":
         # See http://successfulsoftware.net/2013/10/23/fixing-qt-4-for-mac-os-x-10-9-mavericks/
         substitutes = [
@@ -89,10 +89,10 @@ if __name__=="__main__":
             (".Helvetica Neue DeskInterface", "Helvetica Neue")
         ]
         for substitute in substitutes:
-            QtGui.QFont.insertSubstitution(*substitute)
+            QtWidgets.QFont.insertSubstitution(*substitute)
     view = MyTableView()
     model = MyTableModel()
     view.setModel(model)
     view.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
     

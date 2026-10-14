@@ -9,10 +9,10 @@ from __future__ import (division, print_function, absolute_import,
 __all__ = ["PeriodicTableDialog"]
 
 from numpy import ceil
-from PySide import QtCore, QtGui
+from PySide6 import QtCore, QtWidgets
 from textwrap import dedent
 
-class PeriodicTableDialog(QtGui.QDialog):
+class PeriodicTableDialog(QtWidgets.QDialog):
 
     elements = """
         H                                                  He
@@ -67,28 +67,28 @@ class PeriodicTableDialog(QtGui.QDialog):
 
         # Display dialog in center and set size policy.
         self.setGeometry(800, 500, 800, 500)
-        self.move(QtGui.QApplication.desktop().screen().rect().center() \
-            - self.rect().center())
+        screen = self.screen() if self.screen() else QtWidgets.QApplication.primaryScreen()
+        self.move(screen.geometry().center() - self.rect().center())
         self.setWindowTitle(
             "Select element{s}".format(s="s" if multiple_select else ""))
 
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, 
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, 
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
-        vbox = QtGui.QVBoxLayout(self)
+        vbox = QtWidgets.QVBoxLayout(self)
 
         if explanation is not None:
             self._offset += 1
-            explanatory_label = QtGui.QLabel(self)
+            explanatory_label = QtWidgets.QLabel(self)
             explanatory_label.setWordWrap(True)
             explanatory_label.setText(explanation)
             vbox.addWidget(explanatory_label)
 
         # Add grid layout.
-        grid = QtGui.QGridLayout()
+        grid = QtWidgets.QGridLayout()
 
         # How many columns and rows of axes?
         N_rows = len(self.elements.split("\n"))
@@ -107,7 +107,7 @@ class PeriodicTableDialog(QtGui.QDialog):
                 element = element.strip()
 
                 if element:    
-                    label = QtGui.QPushButton(self)
+                    label = QtWidgets.QPushButton(self)
                     label.setMinimumSize(QtCore.QSize(size, size))
                     label.setMaximumSize(QtCore.QSize(size, size))
                     label.setObjectName("element_{}".format(element))
@@ -123,19 +123,19 @@ class PeriodicTableDialog(QtGui.QDialog):
 
             if not row.strip(): # Blank row.
                 grid.addItem(
-                    QtGui.QSpacerItem(size, size, 
-                        QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum),
+                    QtWidgets.QSpacerItem(size, size, 
+                        QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum),
                     i, 0, 1, 1)
 
         vbox.addLayout(grid)
 
         # Add an 'OK' button if this is a multiple selection dialog.
         if multiple_select:
-            hbox = QtGui.QHBoxLayout()
-            hbox.addItem(QtGui.QSpacerItem(10, 10, 
-                QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Minimum))
+            hbox = QtWidgets.QHBoxLayout()
+            hbox.addItem(QtWidgets.QSpacerItem(10, 10, 
+                QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Minimum))
 
-            self.btn_ok = QtGui.QPushButton(self)
+            self.btn_ok = QtWidgets.QPushButton(self)
             self.btn_ok.setText("OK")
             self.btn_ok.setEnabled(False)
             self.btn_ok.clicked.connect(self.close)
@@ -239,10 +239,10 @@ if __name__ == "__main__":
     # This is just for development testing.
     import sys
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
     except RuntimeError:
         None
     window = PeriodicTableDialog(["Fe", "Ti"], multiple_select=True,
         explanation="Do something please")
-    window.exec_()
+    window.exec()
 

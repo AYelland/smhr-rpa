@@ -9,7 +9,7 @@ from __future__ import (division, print_function, absolute_import,
 import numpy as np
 import os
 import sys
-from PySide import QtCore, QtGui
+from PySide6 import QtCore, QtWidgets
 
 from matplotlib import (gridspec, pyplot as plt)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["IsotopeDialog","IsotopeError","IsotopeLog"]
 
-class IsotopeDialog(QtGui.QDialog):
+class IsotopeDialog(QtWidgets.QDialog):
     """
     Widget to edit isotope ratios.
 
@@ -42,12 +42,12 @@ class IsotopeDialog(QtGui.QDialog):
 
         if isinstance(session, Session):
             if isinstance(orig_isotopes, dict):
-                logger.warn("IsotopeDialog: Session already has isotopes, clobbering...")
+                logger.warning("IsotopeDialog: Session already has isotopes, clobbering...")
             orig_isotopes = session.metadata['isotopes']
             if isinstance(linelist, LineList):
-                logger.warn("IsotopeDialog: Session already has isotopes, clobbering...")
+                logger.warning("IsotopeDialog: Session already has isotopes, clobbering...")
             if isinstance(needed_isotopes, dict):
-                logger.warn("IsotopeDialog: Using session, clobbering needed_isotopes...")
+                logger.warning("IsotopeDialog: Using session, clobbering needed_isotopes...")
             needed_isotopes = None
             if 'line_list' in session.metadata.keys():
                 linelist = session.metadata['line_list']
@@ -82,12 +82,12 @@ class IsotopeDialog(QtGui.QDialog):
         self.default_isotopes = [isoutils.load_isotope_data(x) for x in ['rproc','sproc','sneden','asplund']]
 
         # Establish the GUI for this tab.
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
-        layout = QtGui.QHBoxLayout(self)
+        layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
 
         # Create editable table
@@ -100,37 +100,37 @@ class IsotopeDialog(QtGui.QDialog):
         table_view.resizeColumnsToContents()
 
         # Create and link buttons
-        button_widget = QtGui.QWidget(self)
+        button_widget = QtWidgets.QWidget(self)
         text_box = IsotopeLog(self)
         text_box.setReadOnly(True)
         
-        button_needed = QtGui.QPushButton("Print Needed Isotopes")
+        button_needed = QtWidgets.QPushButton("Print Needed Isotopes")
         button_needed.clicked.connect(self.print_needed_isotopes)
-        button_add_row = QtGui.QPushButton("Add Row To Bottom")
+        button_add_row = QtWidgets.QPushButton("Add Row To Bottom")
         button_add_row.clicked.connect(self.add_row)
-        button_ins_row = QtGui.QPushButton("Insert Row")
+        button_ins_row = QtWidgets.QPushButton("Insert Row")
         button_ins_row.clicked.connect(self.insert_row)
-        button_del_row = QtGui.QPushButton("Delete Row")
+        button_del_row = QtWidgets.QPushButton("Delete Row")
         button_del_row.clicked.connect(self.delete_row)
-        button_rproc  = QtGui.QPushButton("Use r-process (Sneden08)")
+        button_rproc  = QtWidgets.QPushButton("Use r-process (Sneden08)")
         button_rproc.clicked.connect(self.use_rproc)
-        button_sproc  = QtGui.QPushButton("Use s-process (Sneden08)")
+        button_sproc  = QtWidgets.QPushButton("Use s-process (Sneden08)")
         button_sproc.clicked.connect(self.use_sproc)
-        button_sneden = QtGui.QPushButton("Use Sneden08 solar")
+        button_sneden = QtWidgets.QPushButton("Use Sneden08 solar")
         button_sneden.clicked.connect(self.use_sneden)
-        button_asplund= QtGui.QPushButton("Use Asplund09 solar")
+        button_asplund= QtWidgets.QPushButton("Use Asplund09 solar")
         button_asplund.clicked.connect(self.use_asplund)
-        button_finish = QtGui.QPushButton("Save isotopes to session and exit")
+        button_finish = QtWidgets.QPushButton("Save isotopes to session and exit")
         button_finish.clicked.connect(self.finish)
         if not isinstance(session, Session):
             button_finish.setEnabled(False)
-        button_cancel = QtGui.QPushButton("Restore original isotopes and exit (TODO)")
+        button_cancel = QtWidgets.QPushButton("Restore original isotopes and exit (TODO)")
         button_cancel.clicked.connect(self.reject) #built-in finish button
 
         all_buttons = [button_needed, button_add_row, button_ins_row, button_del_row, 
                        button_rproc, button_sproc, button_sneden, button_asplund,
                        button_finish, button_cancel]
-        button_layout = QtGui.QVBoxLayout(button_widget)
+        button_layout = QtWidgets.QVBoxLayout(button_widget)
         button_layout.addWidget(text_box)
         for button in all_buttons:
             button_layout.addWidget(button)
@@ -235,7 +235,7 @@ class IsotopeDialog(QtGui.QDialog):
     def log(self,msg):
         self.text_box.appendMessage(msg)
 
-class IsotopeTableView(QtGui.QTableView):
+class IsotopeTableView(QtWidgets.QTableView):
     def __init__(self, parent, *args):
         super(IsotopeTableView, self).__init__(parent, *args)
         self.parent = parent
@@ -243,13 +243,13 @@ class IsotopeTableView(QtGui.QTableView):
         """
         Right-click menu
         """
-        menu = QtGui.QMenu(self)
+        menu = QtWidgets.QMenu(self)
         insert_action = menu.addAction("Insert Line")
         delete_action = menu.addAction("Delete Line")
         
         insert_action.setEnabled(False)
         delete_action.setEnabled(False)
-#        action = menu.exec_(self.mapToGlobal(event.pos()))
+#        action = menu.exec(self.mapToGlobal(event.pos()))
 #        if action == delete_action:
 #            self.parent.delete_row()
 #        elif action == insert_action:
@@ -305,7 +305,7 @@ class IsotopeModel(QtCore.QAbstractTableModel):
         self.tab = np.delete(self.tab,row,axis=0)
         self.endRemoveRows()
 
-class IsotopeLog(QtGui.QPlainTextEdit):
+class IsotopeLog(QtWidgets.QPlainTextEdit):
     def log(self,msg):
         self.appendMessage(msg)
     def appendMessage(self,msg):
@@ -322,8 +322,8 @@ if __name__=="__main__":
     session.metadata['isotopes'] = orig_isotopes
     session.metadata['line_list'] = ll
 
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = IsotopeDialog(session) #orig_isotopes=orig_isotopes, linelist=ll)
-    window.exec_()
+    window.exec()
     #print(session.metadata['isotopes'])
     #print('U in isotopes?', 'U' in session.metadata['isotopes'])

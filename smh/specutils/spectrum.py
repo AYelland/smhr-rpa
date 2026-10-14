@@ -16,7 +16,9 @@ from collections import OrderedDict
 from hashlib import md5
 
 from astropy.io import fits
-from scipy import interpolate, ndimage, polyfit, poly1d, optimize as op
+import numpy as np
+from scipy import interpolate, ndimage, optimize as op
+from numpy import polyfit, poly1d
 
 logger = logging.getLogger(__name__)
 
@@ -112,18 +114,25 @@ class Spectrum1D(object):
 
         # Try multi-spec first since this is currently the most common use case.
         methods = (
+	    cls.read_ghost, # Vini (via ChatGPT)
             cls.read_fits_multispec,
             cls.read_fits_spectrum1d,
             cls.read_ascii_spectrum1d,
+            cls.read_ascii_spectrum1d_noivar,
+            cls.read_alex_spectrum,
+            cls.read_ceres,
             cls.read_multispec,
-            cls.read_ascii_spectrum1d_noivar
+            cls.read_neid, #E. Holmbeck added
+            cls.read_galah
         )
 
+        failure_exceptions = []
         for method in methods:
             try:
                 dispersion, flux, ivar, metadata = method(path, **kwargs)
 
-            except:
+            except Exception as e:
+                failure_exceptions.append(e)
                 continue
 
             else:
@@ -131,12 +140,100 @@ class Spectrum1D(object):
                     for d, f, i in zip(dispersion, flux, ivar)]
                 break
         else:
+            print(f"Exceptions:")
+            for method, e in zip(methods, failure_exceptions):
+                print(method)
+                print(e)
             raise ValueError("cannot read spectrum from path {}".format(path))
 
         # If it's a single order, just return that instead of a 1-length list.
         orders = orders if len(orders) > 1 else orders[0]
         return orders
 
+    @classmethod
+    def read_galah(cls, path):
+        with fits.open(path) as image:
+            
+            wave = image[1].data["wave"]
+            flux = image[1].data["sob"]
+            ivar = image[1].data["uob"]**-2
+            
+            bad_pixels = ~np.isfinite(flux) | ~np.isfinite(ivar) | (ivar == 0)
+            flux[bad_pixels] = np.nan
+            ivar[bad_pixels] = 0
+            
+            metadata = dict(
+                smh_read_path=path
+            )
+            # split up into ccds:
+            split_indices = np.where(np.diff(wave) > 10)[0]
+            indices = np.sort(np.hstack([
+                0, 
+                split_indices + 1,
+                split_indices + 1,
+                wave.size
+            ])).reshape((-1, 2))
+            
+            waves, fluxs, ivars = ([], [], [])
+            for si, ei in indices:
+                waves.append(wave[si:ei])
+                fluxs.append(flux[si:ei])
+                ivars.append(ivar[si:ei])
+                        
+        return (waves, fluxs, ivars, metadata)
+
+    @classmethod
+    def read_alex_spectrum(cls, path):
+        image = fits.open(path)
+
+        # Merge headers into a metadata dictionary.
+        metadata = OrderedDict()
+        for key, value in image[0].header.items():
+            if key in metadata:
+                metadata[key] += value
+            else:
+                metadata[key] = value
+        metadata["smh_read_path"] = path
+        
+        md5_hash = md5(";".join([v for k, v in metadata.items() \
+                                 if k.startswith("BANDID")]).encode("utf-8")).hexdigest()
+        assert md5_hash == "8538046d98bf8a760b04690e53e394a1"
+
+        data = image[0].data
+        waves, fluxs, ivars = data[0], data[1], data[2]
+        
+        image.close()
+
+        return (waves, fluxs, ivars, metadata)
+
+    @classmethod
+    def read_ceres(cls, fname):
+        with fits.open(fname) as hdul:
+            assert len(hdul)==1, len(hdul)
+            header = hdul[0].header
+            assert header["PIPELINE"] == "CERES", header["PIPELINE"]
+            data = hdul[0].data
+            Nband, Norder, Npix = data.shape
+            # https://github.com/rabrahm/ceres
+            # by default it looks sorted from red to blue orders, so we'll flip it in the output
+            waves = data[0,::-1,:]
+            fluxs = data[1,::-1,:]
+            ivars = data[2,::-1,:]
+            # 3, 4 = blaze corrected flux and error
+            # 5, 6 = continuum normalized flux and error
+            # 7 = continuum
+            # 8 = s/n
+            # 9, 10 = Continumm normalized flux multiplied by the derivative of the wavelength with respect to the pixels + err
+
+            # Merge headers into a metadata dictionary.
+            metadata = OrderedDict()
+            for key, value in header.items():
+                if key in metadata:
+                    metadata[key] += value
+                else:
+                    metadata[key] = value
+            metadata["smh_read_path"] = fname
+        return (waves, fluxs, ivars, metadata)
 
     @classmethod
     def read_multispec(cls, fname, full_output=False):
@@ -264,7 +361,7 @@ class Spectrum1D(object):
         # Parse the order mapping into dispersion values.
         # Do it this way to ensure ragged arrays work
         num_pixels, num_orders = metadata["NAXIS1"], metadata["NAXIS2"]
-        dispersion = np.zeros((num_orders, num_pixels), dtype=np.float) + np.nan
+        dispersion = np.zeros((num_orders, num_pixels), dtype=float) + np.nan
         for j in range(num_orders):
             _dispersion = compute_dispersion(*order_mapping[j])
             dispersion[j,0:len(_dispersion)] = _dispersion
@@ -275,7 +372,7 @@ class Spectrum1D(object):
         # NOTE: Most multi-spec data previously used with SMH have been from
         #       Magellan/MIKE, and reduced with CarPy.
         md5_hash = md5(";".join([v for k, v in metadata.items() \
-            if k.startswith("BANDID")])).hexdigest()
+                                 if k.startswith("BANDID")]).encode("utf-8")).hexdigest()
         is_carpy_mike_product = (md5_hash == "0da149208a3c8ba608226544605ed600")
         # E. Holmbeck added the second line for du Pont
         is_carpy_mike_product_old = (md5_hash == "e802331006006930ee0e60c7fbc66cec")
@@ -301,6 +398,7 @@ class Spectrum1D(object):
         elif is_iraf_3band_product:
             flux_ext = flux_ext or 0
             noise_ext = ivar_ext or 2
+            if len(image[0].data) == 2: noise_ext =1
             
             logger.info(
                 "Recognized IRAF 3band product. Using zero-indexed flux/noise "
@@ -315,6 +413,14 @@ class Spectrum1D(object):
             flux = image[0].data[flux_ext]
             ivar = image[0].data[noise_ext]**(-2)
 
+        elif is_iraf_1band_product:
+            ## This happens for some McDonald Data
+            logger.info(
+                "Recognized IRAF single band product, no noise."
+                "extension (bands) {}, Poisson noise".format(flux_ext))
+            flux = image[0].data
+            ivar = 1./np.abs(flux)
+            
         elif is_apo_product:
             flux_ext = flux_ext or 0
             if md5_hash == "9d008ba2c3dc15549fd8ffe8a605ec15":
@@ -405,6 +511,7 @@ class Spectrum1D(object):
         ivar[0 >= flux] = 0.000000000001
         #ivar[0 >= flux] = 999999
         #flux[0 >= flux] = np.nan
+        #flux[0 >= flux] = np.nan
 
         # turn into list of arrays if it's ragged
         if np.any(np.isnan(dispersion)):
@@ -423,7 +530,120 @@ class Spectrum1D(object):
 
         return (dispersion, flux, ivar, metadata)
 
+    @classmethod
+    def read_ghost(cls, path, **kwargs):
+        """
+        Code from Vini Placco (2025-06)
+        Read GHOST (Gemini High-resolution Optical SpecTrograph) spectra from a calibrated FITS file.
 
+        This method expects the following HDUs for each arm (blue and red):
+        - SCI: Flux data
+        - VAR: Variance data
+        - AWAV: Wavelength solution (dispersion)
+
+        """
+        with fits.open(path) as hdul:
+            metadata = OrderedDict(hdul[0].header)
+            metadata["smh_read_path"] = path
+
+            # Container for each order
+            dispersions, fluxes, ivars = [], [], []
+#IFU1
+            sci  = hdul[1].data.T  # SCI
+            var  = hdul[2].data.T  # VAR
+            awav = hdul[4].data.T  # AWAV
+#IFU2
+#            sci  = hdul[5].data.T  # SCI
+#            var  = hdul[6].data.T  # VAR
+#            awav = hdul[8].data.T  # AWAV
+
+            # Loop over orders (columns)
+            for order in range(sci.shape[1]):
+                flux = sci[:, order]
+                ivar = 1.0 / var[:, order]
+                dispersion = awav[:, order]*10. # nm to A
+
+                # Clean bad pixels
+                bad = ~np.isfinite(flux) | ~np.isfinite(ivar) | ~np.isfinite(dispersion) | (ivar <= 0)
+                flux[bad] = np.nan
+                ivar[bad] = 0.0
+
+                # Remove unphysical low values
+                too_low = flux < -1e2
+                flux[too_low] = np.nan
+                ivar[too_low] = 0.0
+            
+                # Remove unphysical high values (> mean + 3*std)
+                finite_flux = flux[np.isfinite(flux)]
+                if finite_flux.size > 0:
+                    flux_mean = np.nanmean(finite_flux)
+                    flux_std = np.nanstd(finite_flux)
+                    high_thresh = flux_mean + 5 * flux_std
+            
+                    too_high = flux > high_thresh
+                    flux[too_high] = np.nan
+                    ivar[too_high] = 0.0
+                
+		# Trim 10% of the edges of each order
+                cut = int(0.10 * len(flux))
+                flux = flux[cut:-cut]
+                ivar = ivar[cut:-cut]
+                dispersion = dispersion[cut:-cut]
+
+
+                dispersions.append(dispersion)
+                fluxes.append(flux)
+                ivars.append(ivar)
+
+        return (dispersions, fluxes, ivars, metadata)
+
+    # E. Holmbeck added NEID capabilities
+    @classmethod
+    def read_neid(cls, path, **kwargs):
+        image = fits.open(path)
+        metadata = OrderedDict()
+        if 'SCIWAVE' not in image:
+            image = image[0]
+        
+        for key, value in image['SCIWAVE'].header.items():
+            if key in metadata:
+                metadata[key] += value
+            else:
+                metadata[key] = value
+        metadata["smh_read_path"] = path
+    
+        dispersion = -np.ones((metadata['NAXIS2'], metadata['NAXIS1']))
+        for order in range(1,metadata['NAXIS2']+1):
+            crval = metadata[f'CRVAL{order:.0f}']
+            cdelt = metadata[f'CDELT{order:.0f}']
+            poly_type = metadata[f'PS{order:.0f}_0']
+            poly_param_order = metadata[f'PS{order:.0f}_1']
+            #pixels = np.arange(*eval(metadata[f'PS{order:.0f}_2']))
+            echelle_order = metadata[f'PS{order:.0f}_3']
+            leg_range = eval(metadata[f'PS{order:.0f}_4'])
+            #poly_params = [metadata[f'PV{order:.0f}_{param:.0f}'] for param in range(poly_param_order)]
+            poly_params = []
+            for param in range(poly_param_order):
+                value = metadata[f'PV{order:.0f}_{param:.0f}']
+                if value is None: poly_params.append(np.nan)
+                else: poly_params.append(value)
+            
+            x = np.linspace(leg_range[0], leg_range[1], metadata['NAXIS1'])
+            if poly_type=='Legendre' or 'legendre' in poly_type:
+                from scipy.special import legendre
+                for li in range(poly_param_order):
+                    dispersion[order-1] += poly_params[li]*legendre(li)(x)
+            
+            else: print(poly_type)
+    
+        flux = np.array(image['SCIFLUX'].data)
+        var = np.array(image['SCIVAR'].data)
+
+        dispersion = np.atleast_2d(dispersion)
+        flux = np.atleast_2d(flux)
+        ivar = np.atleast_2d(var**-1)
+        return (dispersion, flux, ivar, metadata)
+    
     @classmethod
     def read_fits_spectrum1d(cls, path, **kwargs):
         """
@@ -579,7 +799,7 @@ class Spectrum1D(object):
         
         if not filename.endswith('fits'):
             a = np.array([self.dispersion, self.flux, self.ivar]).T
-            np.savetxt(filename, a, fmt="%.4f".encode('ascii'))
+            np.savetxt(filename, a, fmt="%.6f")
             return
         
         else:
@@ -649,7 +869,7 @@ class Spectrum1D(object):
                     try:
                         hdu.header[key] = value
                     except ValueError:
-                        #logger.warn("Could not save header key/value combination: %s = %s" % (key, value, ))
+                        #logger.warning("Could not save header key/value combination: %s = %s" % (key, value, ))
                         print("Could not save header key/value combination: %s = %s".format(key, value))
                 hdulist = fits.HDUList([hdu,hdu2])
                 hdulist.writeto(filename, output_verify=output_verify, clobber=clobber)
@@ -841,8 +1061,6 @@ class Spectrum1D(object):
 
         exclusions = []
         continuum_indices = range(len(self.flux))
-        #import pdb
-        #pdb.set_trace()
 
         # Snip left and right
         finite_positive_flux = np.isfinite(self.flux) * self.flux > 0
@@ -968,7 +1186,7 @@ class Spectrum1D(object):
 
             if function == 'spline':
                 if order > 5:
-                    logger.warn("Splines can only have a maximum order of 5. "
+                    logger.warning("Splines can only have a maximum order of 5. "
                         "Limiting order value to 5.")
                     order = 5
 
@@ -1060,7 +1278,7 @@ class Spectrum1D(object):
             exclude_indices.extend(lower_exclude)
             exclude_indices = np.array(exclude_indices)
             
-            if len(exclude_indices) is 0: break
+            if len(exclude_indices) == 0: break
             
             exclusions.extend(exclude_indices)
             
@@ -1136,7 +1354,7 @@ class Spectrum1D(object):
             zero_flux_indices)))
 
 
-        if knot_spacing is None or knot_spacing == 0 or continuum_indices == []:
+        if knot_spacing is None or knot_spacing == 0 or len(continuum_indices) == 0:
             knots = []
         else:
             knot_spacing = abs(knot_spacing)
@@ -1557,7 +1775,7 @@ def stitch(spectra, new_dispersion=None, full_output=False):
     finite = np.isfinite(common_flux * common_ivar)
     common_flux[~finite] = 0
     common_ivar[~finite] = 0
-
+    
     numerator = np.sum(common_flux * common_ivar, axis=0)
     denominator = np.sum(common_ivar, axis=0)
     flux, ivar = (numerator/denominator, denominator)
@@ -1608,3 +1826,4 @@ def coadd(spectra, new_dispersion=None, full_output=False):
     else:
         return newspec
     
+

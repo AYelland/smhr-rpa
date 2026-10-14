@@ -7,7 +7,7 @@ from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
 
 import logging
-from PySide import QtCore, QtGui
+from PySide6 import QtCore, QtWidgets
 import yaml
 import time, os, sys
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     # Create the app and clean up any style bugs.
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
 
     except RuntimeError:
         # For development.
@@ -48,7 +48,7 @@ if __name__ == '__main__':
             (".Helvetica Neue DeskInterface", "Helvetica Neue")
         ]
         for substitute in substitutes:
-            QtGui.QFont.insertSubstitution(*substitute)
+            QtWidgets.QFont.insertSubstitution(*substitute)
 
     # Create a global exception hook.
     sys._excepthook = sys.excepthook
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         # Load a GUI that shows the exception.
         exception_gui = exception.ExceptionWidget(
             exception_type, message, traceback)
-        exception_gui.exec_()
+        exception_gui.exec()
 
         # Ignore future exceptions of this kind?
         if exception_gui.ignore_in_future:
@@ -115,4 +115,4 @@ if __name__ == '__main__':
     app.window.chemical_abundances_tab.fit_all()
 
     app.window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

@@ -10,7 +10,7 @@ __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 from numpy import array
 from .utils import element
 
-from ..utils import element_to_atomic_number, species_to_element
+from ..utils import element_to_atomic_number, species_to_element, _debytify
 
 def asplund_2009(elements):
     """
@@ -116,7 +116,8 @@ def asplund_2009(elements):
 
     def parse(x):
 
-        if isinstance(x, (str, unicode)):
+        x = _debytify(x)
+        if isinstance(x, str):
             try:
                 return (asplund_2009[x], True)
             except KeyError:

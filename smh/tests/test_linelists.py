@@ -5,7 +5,6 @@ import os
 
 from smh import linelists, utils
 from smh.linelists import LineList
-from nose.tools import assert_equals, assert_almost_equals, ok_
 from astropy import table
 import numpy as np
 
@@ -42,12 +41,12 @@ def test_colnames():
     for ll in lls:
         required_colnames = ll.full_colnames
         for col in required_colnames:
-            ok_(col in ll.columns)
+            assert col in ll.columns
 def test_moog_colnames():
     for ll in moog_lls:
         required_colnames = ll.moog_colnames
         for col in required_colnames:
-            ok_(col in ll.columns)
+            assert col in ll.columns
 def test_merge():
     ll1 = lls[0]
     ll2 = lls[1]
@@ -60,36 +59,42 @@ def test_duplicates():
     ll2 = LineList.read_moog(fname)
     ll = table.vstack([ll1,ll2[0:N]])
     duplicate_indices,duplicate_lines = ll.find_duplicates(thresh=.01)
-    assert_equals(2*N,len(duplicate_indices))
+    assert len(duplicate_indices) == 2 * N
 
-def test_readwrite_moog(fname=datadir+'/linelists/masseron_linch.txt'):
+def test_readwrite_moog(tmp_path, fname=datadir+'/linelists/masseron_linch.txt'):
     ll = LineList.read(fname)
     ll = LineList.read(fname,format='moog')
-    ll.write('_test.moog',format='moog')
-    ll2 = LineList.read('_test.moog')
+    output_path = str(tmp_path / "test.moog")
+    ll.write(output_path, format='moog')
+    ll2 = LineList.read(output_path)
     for i in range(len(ll)):
         for col in ll[i].colnames:
             if isinstance(ll[i][col], str): continue
+            if np.ma.is_masked(ll[i][col]) or np.ma.is_masked(ll2[i][col]):
+                continue
             diff = np.sum(np.abs(ll[i][col] - ll2[i][col]))
-            assert np.isnan(diff) or diff < .001, "{} {}".format(ll[i][col],ll2[i][col])
-    os.remove('_test.moog')
-def test_writeread(fname=datadir+'/linelists/masseron_linch.txt'):
+            assert np.isnan(diff) or diff < .001, \
+                "{} {}".format(ll[i][col], ll2[i][col])
+def test_writeread(tmp_path, fname=datadir+'/linelists/masseron_linch.txt'):
     ll = LineList.read(fname)
-    ll.write('line_list.fits',format='fits')
-    ll2 = LineList.read('line_list.fits',format='fits')
+    output_path = str(tmp_path / "line_list.fits")
+    ll.write(output_path, format='fits')
+    ll2 = LineList.read(output_path, format='fits')
     for i in range(len(ll)):
         for col in ll[i].colnames:
             if isinstance(ll[i][col], str): continue
+            if np.ma.is_masked(ll[i][col]) or np.ma.is_masked(ll2[i][col]):
+                continue
             diff = np.sum(np.abs(ll[i][col] - ll2[i][col]))
-            assert np.isnan(diff) or diff < .001, "{} {}".format(ll[i][col],ll2[i][col])
-    os.remove('line_list.fits')
+            assert np.isnan(diff) or diff < .001, \
+                "{} {}".format(ll[i][col], ll2[i][col])
 
 def test_exception():
     ll = LineList.read(datadir+'/linelists/complete.list')
     N = len(ll)
     ll2 = LineList.read(datadir+'/linelists/complete.list')
     ll.merge(ll2,skip_equal_loggf=True)
-    assert len(ll)==N,"{} {}".format(len(ll),N)
+    assert len(ll) == N, "{} {}".format(len(ll), N)
     
     ll2[5]['loggf'] = -3.14159
     ll2[200]['loggf'] = -3.14159

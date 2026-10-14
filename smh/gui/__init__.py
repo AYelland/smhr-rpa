@@ -5,7 +5,7 @@ from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
 
 import logging
-from numpy import RankWarning
+from numpy.exceptions import RankWarning
 from warnings import simplefilter
 
 logger = logging.getLogger(__name__)

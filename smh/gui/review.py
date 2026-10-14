@@ -11,7 +11,7 @@ from __future__ import (division, print_function, absolute_import,
 import logging
 import numpy as np
 import sys
-from PySide import QtCore, QtGui
+from PySide6 import QtCore, QtWidgets
 import time
 
 import smh
@@ -26,16 +26,16 @@ from smh import utils
 logger = logging.getLogger(__name__)
 logger.addHandler(smh.handler)
 
-class ReviewTab(QtGui.QWidget):
+class ReviewTab(QtWidgets.QWidget):
     def __init__(self, parent):
         super(ReviewTab, self).__init__(parent)
         self.parent = parent
-        self.parent_layout = QtGui.QHBoxLayout(self)
+        self.parent_layout = QtWidgets.QHBoxLayout(self)
         
         #######################################
         #### LHS: Summary and Measurement Table
         #######################################
-        lhs_layout = QtGui.QVBoxLayout()
+        lhs_layout = QtWidgets.QVBoxLayout()
         self._init_summary_table()
         self._current_species = None
         lhs_layout.addWidget(self.summary_view)
@@ -48,7 +48,7 @@ class ReviewTab(QtGui.QWidget):
         ##################################
         #### RHS: Interactive Scatterplots
         ##################################
-        rhs_layout = QtGui.QVBoxLayout()
+        rhs_layout = QtWidgets.QVBoxLayout()
         rhs_layout.setSpacing(0)
         self._init_scatterplots()
         rhs_layout.addWidget(self.plot1)
@@ -60,9 +60,12 @@ class ReviewTab(QtGui.QWidget):
     def new_session_loaded(self):
         session = self.parent.session
         if session is None: return None
+        # self.measurement_model.beginResetModel()
         self.summary_model.new_session(session)
         self.full_measurement_model.new_session(session)
         self.measurement_model.reset()
+        # self.measurement_model.reindex()
+        # self.measurement_model.endResetModel()
         self.measurement_view.update_session(session)
         self.refresh_plots()
         return None
@@ -88,6 +91,7 @@ class ReviewTab(QtGui.QWidget):
         return None
     def change_measurement_table_species(self, species):
         # Update the filter
+        self.measurement_model.beginResetModel()
         if self._current_species is not None:
             _current_species_str = "{:.1f}".format(self._current_species)
             try:
@@ -102,11 +106,11 @@ class ReviewTab(QtGui.QWidget):
             self.measurement_model.add_filter_function(speciesstr, filterfn)
         self._current_species = species
         # Reset the model (and its views)
-        self.measurement_model.reset()
+        self.measurement_model.endResetModel()
     def refresh_plots(self):
-        self.plot1.update_scatterplot(False)
-        self.plot2.update_scatterplot(False)
-        self.plot3.update_scatterplot(False)
+        self.plot1.update_scatterplot(True)
+        self.plot2.update_scatterplot(True)
+        self.plot3.update_scatterplot(True)
         self.plot1.update_selected_points(True)
         self.plot2.update_selected_points(True)
         self.plot3.update_selected_points(True)
@@ -116,6 +120,18 @@ class ReviewTab(QtGui.QWidget):
         self.plot3.update_selected_points(True)
     def selected_measurement_changed(self):
         self.refresh_selected_points()
+        if self.measurement_view is None or self.measurement_model is None: return None
+        #logger.debug("update_selected_points ({}, {})".format(self, redraw))
+        row = self.measurement_view.selectionModel().selectedRows()
+        # TODO: this doesn't work yet; ideally, update the plots in the Chemical Abundances tab.
+        if len(row)>0:
+            row = row[0]
+            # We're only going to plot the first one anyway
+            row_index = row.row()
+            self.parent.chemical_abundances_tab.measurement_view.update_row(row_index)
+            spectral_model = self.measurement_model.get_models_from_rows([row_index])[0]
+            self.parent.chemical_abundances_tab.selected_model_changed(selected_model=spectral_model)
+
         return None
 
     def _init_summary_table(self):
@@ -123,7 +139,7 @@ class ReviewTab(QtGui.QWidget):
         self.summary_model = MeasurementSummaryTableModel(self, self.parent.session)
         # Create and link summary view
         self.summary_view = BaseTableView(self)
-        self.summary_view.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        self.summary_view.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.summary_view.setModel(self.summary_model)
         _ = self.summary_view.selectionModel()
         _.selectionChanged.connect(self.selected_summary_changed)
@@ -150,8 +166,8 @@ class ReviewTab(QtGui.QWidget):
         ## Sorting crashes :(
         #self.measurement_view.setSortingEnabled(True)
         #self.measurement_view.setItemDelegate(MeasurementTableDelegate(self,self.measurement_view))
-        self.measurement_view.setSizePolicy(QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.MinimumExpanding))
+        self.measurement_view.setSizePolicy(QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.MinimumExpanding))
 
         self.btn_filter_acceptable = btn_filter
         self.btn_filter_acceptable.clicked.connect(self.refresh_plots)
@@ -172,21 +188,27 @@ class ReviewTab(QtGui.QWidget):
         ]
         linefit_styles = [{"color":"k","linestyle":"--","zorder":-99},None,None,None]
         linemean_styles = [{"color":"k","linestyle":":","zorder":-999},None,None,None]
-        self.plot1 = SMHScatterplot(None, "expot", "abundances",
+        # E. Holmbeck added error_styles:
+        error_styles = [{"ms":40,"markerfacecolor":"None","markeredgecolor":"k","ecolor":"k","lw":1},
+                        {"ms":40,"markerfacecolor":"None","markeredgecolor":"k","ecolor":"c","lw":1},
+                        {"ms":70,"markerfacecolor":"none","markeredgecolor":"red","ecolor":"red","lw":2},
+                        {"ms":0,"markerfacecolor":"none","markeredgecolor":"none","ecolor":"none"},
+                        ]
+        self.plot1 = SMHScatterplot(None, "expot", "abundances",# eyattr="abundance_uncertainties",
                                     tableview=self.measurement_view,
-                                    filters=filters, point_styles=point_styles,
+                                    filters=filters, point_styles=point_styles, error_styles=error_styles,
                                     linefit_styles=linefit_styles,linemean_styles=linemean_styles)
-        self.plot2 = SMHScatterplot(None, "reduced_equivalent_width", "abundances",
+        self.plot2 = SMHScatterplot(None, "reduced_equivalent_width", "abundances",# eyattr="abundance_uncertainties",
                                     tableview=self.measurement_view,
-                                    filters=filters, point_styles=point_styles,
+                                    filters=filters, point_styles=point_styles, error_styles=error_styles,
                                     linefit_styles=linefit_styles,linemean_styles=linemean_styles)
-        self.plot3 = SMHScatterplot(None, "wavelength", "abundances",
+        self.plot3 = SMHScatterplot(None, "wavelength", "abundances",# eyattr="abundance_uncertainties",
                                     tableview=self.measurement_view,
-                                    filters=filters, point_styles=point_styles,
+                                    filters=filters, point_styles=point_styles, error_styles=error_styles,
                                     linefit_styles=linefit_styles,linemean_styles=linemean_styles)
         
-        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, 
-                               QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, 
+                               QtWidgets.QSizePolicy.MinimumExpanding)
         for fig in [self.plot1, self.plot2, self.plot3]:
             fig.setSizePolicy(sp)
         return None

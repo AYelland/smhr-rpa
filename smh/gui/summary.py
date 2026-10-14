@@ -8,8 +8,8 @@ from __future__ import (division, print_function, absolute_import,
 
 import logging
 from os import system
-from PySide import QtCore, QtGui
-from urllib import quote
+from PySide6 import QtCore, QtGui, QtWidgets
+from urllib.parse import quote
 
 import mpl
 
@@ -18,7 +18,7 @@ __all__ = ["SummaryTab"]
 
 logger = logging.getLogger(__name__)
 
-class SummaryTab(QtGui.QWidget):
+class SummaryTab(QtWidgets.QWidget):
 
     def __init__(self, parent):
         """
@@ -38,48 +38,48 @@ class SummaryTab(QtGui.QWidget):
         # - Comments/notes (user info?)
 
         # Set a size policy.
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding,
-            QtGui.QSizePolicy.MinimumExpanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding,
+            QtWidgets.QSizePolicy.MinimumExpanding)
         sp.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sp)
 
         # Create a top-level horizontal layout to contain a MPL figure and
         # a vertical layout of settings..
-        tab_layout = QtGui.QHBoxLayout(self)
+        tab_layout = QtWidgets.QHBoxLayout(self)
         tab_layout.setContentsMargins(20, 20, 20, 0)
 
         # Create the left hand pane.
-        summary_widget = QtGui.QWidget()
-        summary_layout = QtGui.QVBoxLayout(summary_widget)
+        summary_widget = QtWidgets.QWidget()
+        summary_layout = QtWidgets.QVBoxLayout(summary_widget)
 
         # Star name label.
-        self.star_label = QtGui.QLabel(self)
-        bold_monospaced = QtGui.QFont("Courier", 14)
+        self.star_label = QtWidgets.QLabel(self)
+        bold_monospaced = QtGui.QFont("Menlo", 14)
         bold_monospaced.setBold(True)
         self.star_label.setFont(bold_monospaced)
         summary_layout.addWidget(self.star_label)
 
         # Coordinates label.
-        self.coordinates_label = QtGui.QLabel(self)
+        self.coordinates_label = QtWidgets.QLabel(self)
         self.coordinates_label.setFont(bold_monospaced)
         summary_layout.addWidget(self.coordinates_label)
 
         # Notes.
-        self.summary_notes = QtGui.QPlainTextEdit(self)
+        self.summary_notes = QtWidgets.QPlainTextEdit(self)
         summary_layout.addWidget(self.summary_notes)
 
         # External sources of information.
-        hbox = QtGui.QHBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
 
         # - Simbad
-        self.btn_query_simbad = QtGui.QPushButton(self)
+        self.btn_query_simbad = QtWidgets.QPushButton(self)
         self.btn_query_simbad.setText("Query Simbad..")
         self.btn_query_simbad.clicked.connect(self.query_simbad)
 
         hbox.addWidget(self.btn_query_simbad)
-        hbox.addItem(QtGui.QSpacerItem(
-            40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum))
+        hbox.addItem(QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum))
         summary_layout.addLayout(hbox)
         tab_layout.addWidget(summary_widget)
 
@@ -88,8 +88,8 @@ class SummaryTab(QtGui.QWidget):
 
 
         self.figure = mpl.MPLWidget(None, tight_layout=True)
-        sp = QtGui.QSizePolicy(
-            QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        sp = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sp.setHorizontalStretch(0)
         sp.setVerticalStretch(0)
         sp.setHeightForWidth(self.figure.sizePolicy().hasHeightForWidth())

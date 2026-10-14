@@ -2,4 +2,4 @@
 
 
 def test_travis_ci():
-    return True
+    assert True

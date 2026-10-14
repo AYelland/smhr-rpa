@@ -15,11 +15,10 @@ import numpy as np
 import scipy.optimize as op
 import scipy.interpolate
 from collections import OrderedDict
-from six import string_types, iteritems
 from scipy.ndimage import gaussian_filter
 from scipy import stats
 
-from .base import BaseSpectralModel
+from .base import BaseSpectralModel, penalized_curve_fit_lm
 from smh import utils
 from smh.specutils import Spectrum1D
 from smh.photospheres.abundances import asplund_2009 as solar_composition
@@ -66,12 +65,14 @@ def approximate_spectral_synthesis(model, centroids, bounds, rt_abundances={},
         # Include explicitly specified abundances.
         abundances.update(rt_abundances)
         #logger.debug(abundances)
-
+		
+        if 'moog_opts' not in model.metadata:
+            model.metadata['moog_opts'] = {}
         spectra = model.session.rt.synthesize(
             model.session.stellar_photosphere, 
             model.transitions, abundances=abundances,
             isotopes=isotopes,
-            twd=model.session.twd) # TODO other kwargs?
+            twd=model.session.twd, **model.metadata['moog_opts']) # TODO other kwargs?
 
         dispersion = spectra[0][0]
         if fluxes is None:
@@ -92,7 +93,7 @@ def approximate_spectral_synthesis(model, centroids, bounds, rt_abundances={},
 
     # Make sure the function works, otherwise fail early so we can debug.
     assert np.isfinite(call(*centroids)[1]).all()
-
+    
     return call
 
 
@@ -154,6 +155,10 @@ class SpectralSynthesisModel(BaseSpectralModel):
         unique_elements = np.unique(unique_elements)
         
         rt_abundances = {}
+        try:
+            unique_elements = [x.decode() for x in unique_elements]
+        except:
+            pass
         for elem in unique_elements:
             if elem in ["","H"]: continue
             if elem in self.elements: continue
@@ -182,23 +187,23 @@ class SpectralSynthesisModel(BaseSpectralModel):
 
         ## Set some display variables
         if what_wavelength is not None:
-            self._wavelength = what_wavelength
+            self.metadata["wavelength"] = what_wavelength
         if what_expot is None: what_expot = np.nan
         if what_loggf is None: what_loggf = np.nan
-        self._expot = what_expot
-        self._loggf = what_loggf
+        self.metadata["expot"] = what_expot
+        self.metadata["loggf"] = what_loggf
 
         return None
 
     @property
     def expot(self):
         ## TODO for most syntheses this is well-defined
-        return self._expot
+        return self.metadata.get("expot", np.nan)
     
     @property
     def loggf(self):
         ## TODO for most syntheses the combined loggf is well-defined
-        return self._loggf
+        return self.metadata.get("loggf", np.nan)
 
     @property
     def measurement_type(self):
@@ -222,7 +227,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         """
 
         # Format the elements and then check that all are real.
-        if isinstance(elements, string_types):
+        if isinstance(elements, str):
             elements = [elements]
 
         elements = [str(element).title() for element in elements]
@@ -244,7 +249,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
 
     def _verify_species(self, elements, what_species=None):
         # Format the elements and then check that all are real.
-        if isinstance(elements, string_types):
+        if isinstance(elements, str):
             elements = [elements]
 
         elements = [str(element).title() for element in elements]
@@ -358,7 +363,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         return True
 
 
-    def fit(self, spectrum=None, **kwargs):
+    def fit(self, spectrum=None, penalty_function=None, **kwargs):
         """
         Fit a synthesised model spectrum to the observed spectrum.
 
@@ -366,6 +371,10 @@ class SpectralSynthesisModel(BaseSpectralModel):
             The observed spectrum to fit the synthesis spectral model. If None
             is given, this will default to the normalized rest-frame spectrum in
             the parent session.
+
+        :param penalty_function: [optional]
+            A function of the form penalty_function(params) [not *params]
+            to penalize the parameters. Can be used to make a prior on some parameter.
         """
 
         # Check the observed spectrum for validity.
@@ -376,7 +385,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         # have different input arguments.
         for key in set(self.metadata).intersection(kwargs):
             self.metadata[key] = kwargs.pop(key)
-
+        
         # Update the parameter names in case they have been updated due to the
         # input kwargs.
         self._update_parameter_names()
@@ -397,7 +406,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         # approximation is good.
         tolerance_metric = kwargs.pop("tolerance_metric",
             lambda t, a, y, yerr, abs_sigma: np.nansum(np.abs(t - a)) < 0.05)
-
+            
         # Here we set a hard bound limit where linear interpolation must be OK.
         while bounds > 0.01: # dex
             central = p0[:len(self.metadata["elements"])]
@@ -411,7 +420,12 @@ class SpectralSynthesisModel(BaseSpectralModel):
                 return self._nuisance_methods(
                     x, synth_dispersion, intensities, *parameters)
                 
-            p_opt, p_cov = op.curve_fit(objective_function, xdata=x, ydata=y,
+            if penalty_function is None:
+                p_opt, p_cov = op.curve_fit(objective_function, xdata=x, ydata=y,
+                        sigma=yerr, p0=p0, absolute_sigma=absolute_sigma)
+            else:
+                p_opt, p_cov = penalized_curve_fit_lm(
+                    objective_function, xdata=x, ydata=y, penalty_function=penalty_function,
                     sigma=yerr, p0=p0, absolute_sigma=absolute_sigma)
 
             # At small bounds it can be difficult to estimate the Jacobian.
@@ -514,7 +528,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
             abund = self.abundances[0]
             if np.abs(abund - lastabund) < tol: break
         else:
-            logger.warn("iterfit: Reached {}/{} iter without converging. Now {:.3f}, last {:.3f}, tol={:.3f}".format(
+            logger.warning("iterfit: Reached {}/{} iter without converging. Now {:.3f}, last {:.3f}, tol={:.3f}".format(
                     i, maxiter, abund, lastabund, tol))
         return abund
 
@@ -541,7 +555,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
             plot_x = meta["model_x"]
             plot_y = meta["model_y"]
             if self.session.setting("full_synth_resolution", False):
-                logger.warn("Note: exporting synthesis sampled at data points, not full synth resolution!")
+                logger.warning("Note: exporting synthesis sampled at data points, not full synth resolution!")
 
         if len(meta["plot_x"]) != len(ivar):
             synth_spec = Spectrum1D(meta["plot_x"], meta["plot_y"], np.ones(len(meta["plot_x"]))*1e6)
@@ -563,18 +577,18 @@ class SpectralSynthesisModel(BaseSpectralModel):
                 fp.write("{} {:.3f}\n".format(elem, abund))
             fp.write("\n")
             fp.write("----------Fixed Abundances----------\n")
-            for elem, abund in iteritems(self.metadata["rt_abundances"]):
+            for elem, abund in self.metadata["rt_abundances"].items():
                 fp.write("{} {:.3f}\n".format(elem, abund))
             fp.write("\n")
             fp.write("p_opt: {}\n".format(named_p_opt))
             fp.write("cov: {}\n".format(cov))
             fp.write("\n")
             fp.write("----------Parameters----------\n")
-            for key, value in iteritems(self.metadata):
+            for key, value in self.metadata.items():
                 if key=="rt_abundances": continue
                 if key=="fitted_result": continue
                 fp.write("{}: {}\n".format(key, value))
-            for key, value in iteritems(meta):
+            for key, value in meta.items():
                 if key in ['chi_sq','dof']:
                     fp.write("{}: {}\n".format(key, value))
             fp.write("\n")
@@ -599,7 +613,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
         try:
             named_p, cov, meta = self.metadata["fitted_result"]
         except KeyError:
-            logger.warn("No fit run yet!")
+            logger.warning("No fit run yet!")
             return None
         elem = self.elements[0]
         assert "log_eps({})".format(elem) in named_p
@@ -649,7 +663,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
             ## remove the continuum from model and data
             modeldisp = model_output["wl"]
             datadisp  = data_output["wl"]
-            parameters = self.metadata["fitted_result"][0].values()
+            parameters = list(self.metadata["fitted_result"][0].values())
 
             names = self.parameter_names
             O = self.metadata["continuum_order"]
@@ -740,12 +754,14 @@ class SpectralSynthesisModel(BaseSpectralModel):
         except KeyError:
             logger.info("Please run a fit first!")
             return None
+        if 'moog_opts' not in self.metadata:
+            self.metadata['moog_opts'] = {}
         abundances = _fix_rt_abundances(abundances)
         synth_dispersion, intensities, meta = self.session.rt.synthesize(
             self.session.stellar_photosphere, self.transitions,
             abundances=abundances, 
             isotopes=self.session.metadata["isotopes"],
-            twd=self.session.twd)[0] # TODO: Other RT kwargs......
+            twd=self.session.twd, **self.metadata['moog_opts'])[0] # TODO: Other RT kwargs......
         return synth_dispersion, self._nuisance_methods(
             synth_dispersion, synth_dispersion, intensities, *named_p_opt.values())
 
@@ -763,6 +779,11 @@ class SpectralSynthesisModel(BaseSpectralModel):
         # Parse the elemental abundances, because they need to be passed to
         # the synthesis routine.
         abundances = {}
+        
+        # E. Holmbeck; this should be robust, no matter what function calls this, but still.
+        if 'moog_opts' not in self.metadata:
+            self.metadata['moog_opts'] = {}
+        
         names =  self.parameter_names
         for name, parameter in zip(names, parameters):
             if name.startswith("log_eps"):
@@ -778,7 +799,7 @@ class SpectralSynthesisModel(BaseSpectralModel):
             self.session.stellar_photosphere, self.transitions,
             abundances=abundances, 
             isotopes=self.session.metadata["isotopes"],
-            twd=self.session.twd)[0] # TODO: Other RT kwargs......
+            twd=self.session.twd, **self.metadata['moog_opts'])[0] # TODO: Other RT kwargs......
 
         # Save raw synthetic spectrum
         self.metadata["raw_synthetic_dispersion"] = synth_dispersion
@@ -907,6 +928,44 @@ class SpectralSynthesisModel(BaseSpectralModel):
         self.metadata["{}_sigma_abundance_error".format(sigma)] = np.abs(abund1 - abund0)
         return np.abs(abund1 - abund0)
         
+
+    def check_line_detection(self, sigma=3):
+        """
+        Compare the current fit to a synthetic fit with 10^-9 of the current abundance.
+        Returns (is_detection, delta_chi2).
+        Detection assumes a gaussian sigma of 3 (by default), or tail probability of 100-99.7%,
+          assuming 1 degree of freedom
+        """
+        # Load current fit
+        try:
+            (orig_p_opt, cov, meta) = self.metadata["fitted_result"]
+        except KeyError:
+            logger.info("Please run a fit first!")
+            return None, np.nan
+        elem = self.metadata["elements"][0]
+        elem_p_opt_name = "log_eps({})".format(elem)
+        assert elem_p_opt_name in orig_p_opt, (elem, orig_p_opt)
+        abund0 = orig_p_opt[elem_p_opt_name]
+
+        # Set up data again from scratch
+        spectrum = self._verify_spectrum(None)
+        mask = self.mask(spectrum)
+        x = spectrum.dispersion[mask]
+        data_y = spectrum.flux[mask]
+        data_ivar = spectrum.ivar[mask]
+        
+        # recompute chi2 for this and for -9
+        model_y = self(x, *orig_p_opt.values())
+        chi2_current = np.nansum((data_y - model_y)**2 * data_ivar)
+        p_opt = orig_p_opt.copy()
+        p_opt[elem_p_opt_name] = abund0 - 9
+        model_y2 = self(x, *p_opt.values())
+        chi2_none = np.nansum((data_y - model_y2)**2 * data_ivar)
+        
+        delta_chi2 = chi2_none - chi2_current # should be > 0, since chi2_none is worse than the fit
+        frac = stats.norm.cdf(sigma) - stats.norm.cdf(-sigma)
+        threshold = stats.chi2.ppf(frac, 1) # 1 df for one abundance
+        return delta_chi2 > threshold, delta_chi2
 
     def find_upper_limit(self, sigma=3, start_at_current=True, max_elem_diff=12.0, tol=.01, pix_per_element=1.0):
         """

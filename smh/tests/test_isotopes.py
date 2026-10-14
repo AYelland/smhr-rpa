@@ -77,14 +77,14 @@ def test_validate_isotopes():
     except IsotopeError:
         pass
     else:
-        raise Error
+        raise Exception("Isotope validation failed: Expected IsotopeError, but got another error.")
 
 def test_not_needed_isotopes():
     ll = LineList.read(datadir+'/linelists/lin4554new')
     isos = load_isotope_data('asplund') #Does not have Ba!
     found_isos, missing_isos = get_needed_isotopes(ll,isos)
     if len(missing_isos) != 1:
-        raise Error("{}   {}".format(found_isos,missing_isos))
+        raise Exception("Found {} isotopes, Missing {} isotopes.".format(found_isos,missing_isos))
 
 def test_moog_isotopes():
     output = moog.utils._format_isotopes(isotopes={'H-C':{112:.8,113:.2},

@@ -9,9 +9,12 @@ from __future__ import (division, print_function, absolute_import,
 import sys
 
 import logging
-from PySide import QtCore, QtGui
+from PySide6 import QtCore, QtGui, QtWidgets
 import yaml
 import os
+
+# Fixing pyside2 bug: https://www.loekvandenouweland.com/content/pyside2-big-sur-does-not-show-window.html
+os.environ['QT_MAC_WANTS_LAYER'] = '1'
 
 # Hacky path solution to override the original path to smhr
 here = os.path.abspath(os.path.dirname(__file__))
@@ -34,7 +37,7 @@ if __name__ == '__main__':
 
     # Create the app and clean up any style bugs.
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
 
     except RuntimeError:
         # For development.
@@ -81,7 +84,7 @@ if __name__ == '__main__':
         # Load a GUI that shows the exception.
         exception_gui = exception.ExceptionWidget(
             exception_type, message, traceback)
-        exception_gui.exec_()
+        exception_gui.exec()
 
         # Ignore future exceptions of this kind?
         if exception_gui.ignore_in_future:
@@ -96,14 +99,14 @@ if __name__ == '__main__':
     #    "/Users/arc/Downloads/hd122563_1blue_multi_090205_oldbutgood.fits",
     #    "/Users/arc/Downloads/hd122563_1red_multi_090205_oldbutgood.fits"
     #])
-    app.window = Ui_MainWindow()
+    app.window = Ui_MainWindow(app)
     app.window.show()
     app.window.raise_()
 
     # DEBUG
-    #testpath = os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/test_G64-12_v02.smh"
-    #logger.debug("Loading {}".format(testpath))
-    #app.window.open_session(path=testpath)
+    testpath = os.path.join(os.path.expanduser("~"), "Downloads", "testing.smh")
+    logger.debug("Loading {}".format(testpath))
+    app.window.open_session(path=testpath)
     
     # DEBUG
     #testpath = os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/spectra/hd122563.fits"
@@ -118,4 +121,4 @@ if __name__ == '__main__':
     #
     #session = app.window.session
     
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

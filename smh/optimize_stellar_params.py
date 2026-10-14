@@ -15,8 +15,8 @@ import warnings
 from copy import deepcopy
 
 #from astropy.stats.biweight import biweight_scale
-from smh.photospheres.abundances import asplund_2009 as solar_composition
-from smh.utils import mkdtemp
+from .photospheres.abundances import asplund_2009 as solar_composition
+from .utils import mkdtemp
 
 import logging
 logger = logging.getLogger(__name__)
@@ -37,9 +37,7 @@ def stellar_optimization(func):
     doesn't make unncessary (i.e., repeated) calls to MOOG """
 
     def _decorator(request, *args, **kwargs):
-
         previously_sampled_points, total_tolerance, individual_tolerances, use_nlte_grid = args
-        
         previously_sampled_points = np.array(previously_sampled_points)
 
         # Checking if this point is sampled already
@@ -47,7 +45,6 @@ def stellar_optimization(func):
 
             this_point = np.array(request)
             #import pdb; pdb.set_trace()
-
             try:
                 sampled_before = (previously_sampled_points[:, :4] == this_point).all(axis=1)
             except:
@@ -69,23 +66,17 @@ def stellar_optimization(func):
         acquired_total_tolerance = np.sum(pow(response, 2))
         if total_tolerance >= acquired_total_tolerance and \
             (individual_tolerances is None or np.all(np.less_equal(np.abs(response), individual_tolerances))):
-
             message = "Optimization complete. Total tolerance of <{0:.1e} met: {1:.1e}".format(
                 total_tolerance, acquired_total_tolerance)
-
+            
             if individual_tolerances is not None:
                 message += ", and individual tolerances of <[{0:.1e}, {1:.1e}, {2:.1e}, {3:.1e}] met: [{4:.1e}, {5:.1e}, {6:.1e}, {7:.1e}]".format(
                     *tuple(list(response) + list(individual_tolerances)))
-
             else:
                 message += ", and no individual tolerances specified."
-
             raise OptimizationSuccess(message)
-
-
         return response
     return wraps(func)(_decorator)
-
 
 # E. Holmbeck just copied the above decorator, but changed 4-->2.
 # It might be wrong...
@@ -96,29 +87,28 @@ def feh_optimization(func):
 
     def _decorator(request, *args, **kwargs):
 
-        params_to_optimize, previously_sampled_points, total_tolerance, individual_tolerances, use_nlte_grid = args
+        params_to_optimize, previously_sampled_points, total_tolerance, individual_tolerances, use_nlte_grid, use_FeII = args
 
+        mask = np.asarray(params_to_optimize, dtype=bool)
         previously_sampled_points = np.array(previously_sampled_points)
         
         # Checking if this point is sampled already
         if len(previously_sampled_points) > 0:
 
-            this_point = np.array(request)
-            #import pdb; pdb.set_trace()
+            # The solver passes only the free parameters, but the cache stores
+            # all four (held ones as 0), so expand to match before comparing.
+            this_point = np.zeros(4)
+            this_point[mask] = request
 
-            try:
-                sampled_before = (previously_sampled_points[:, :4] == this_point).all(axis=1)
-            except:
-                sampled_before = (previously_sampled_points[:, :4] == this_point)
-                #np.arange(previously_sampled_points[:, :4].ndim - this_point.ndim, previously_sampled_points[:, :4].ndim))
-            #print sampled_before
+            sampled_before = (previously_sampled_points[:, :4] == this_point).all(axis=1)
 
             if np.any(sampled_before):
                 index = np.where(sampled_before)[0][0]
                 logger.debug("Sampled these stellar parameters already, so we're just returning those values.")
                 logger.debug(previously_sampled_points[index])
 
-                return previously_sampled_points[index, 4:]
+                # Cached results hold all four values; the solver wants only the free ones.
+                return previously_sampled_points[index, 4:][mask]
 
         # Perform the optimization
         response = func(request, *args, **kwargs)
@@ -134,25 +124,27 @@ def feh_optimization(func):
             if individual_tolerances is not None:
                 message += ", and individual tolerances of <[{0:.1e}, {1:.1e}, {2:.1e}, {3:.1e}] met: [{4:.1e}, {5:.1e}, {6:.1e}, {7:.1e}]".format(
                     *tuple(list(response) + list(individual_tolerances)))
-
             else:
                 message += ", and no individual tolerances specified."
 
             raise OptimizationSuccess(message)
-
-
         return response
+    
     return wraps(func)(_decorator)
     
 
-
-def optimize_stellar_parameters(initial_guess, transitions, EWs=None, 
-                                jacobian=utils.approximate_sun_hermes_jacobian,
-                                rt=radiative_transfer.moog,
-                                max_attempts=5, total_tolerance=1e-4, 
-                                individual_tolerances=None, 
-                                maxfev=30, use_nlte_grid=None):
-
+def optimize_stellar_parameters(
+        initial_guess, 
+        transitions, 
+        EWs=None, 
+        jacobian=utils.approximate_sun_hermes_jacobian,
+        rt=radiative_transfer.moog,
+        max_attempts=5, 
+        total_tolerance=1e-4, 
+        individual_tolerances=None, 
+        maxfev=30, 
+        use_nlte_grid=None,
+        alpha=0.4):
     """
     Assumes these are all transitions you want to use for stellar parameters
     Assumes you only want to balance neutral ions against Expot and REW
@@ -178,7 +170,7 @@ def optimize_stellar_parameters(initial_guess, transitions, EWs=None,
         "vt": (0.0, 4.0),
         "logg": (0, 5),
         "[Fe/H]": (-5, 0.5)
-        }
+    }
     
     # Create a mutable copy for the initial guess
     solver_guess = []
@@ -209,7 +201,7 @@ def optimize_stellar_parameters(initial_guess, transitions, EWs=None,
         #if not (5 > vt > 0):
         #    return np.array([np.nan, np.nan, np.nan, np.nan])
         
-        photosphere = photosphere_interpolator(teff, logg, feh)
+        photosphere = photosphere_interpolator(teff, logg, feh, alpha)
         photosphere.meta["stellar_parameters"]["microturbulence"] = vt
         
         ## TODO: ADJUST ABUNDANCES TO ASPLUND?
@@ -230,14 +222,14 @@ def optimize_stellar_parameters(initial_guess, transitions, EWs=None,
         all_sampled_points.append(point)
 
         logger.info("Atmosphere with Teff = {0:.0f} K, vt = {1:.2f} km/s, logg = {2:.2f}, [Fe/H] = {3:.2f}, [alpha/Fe] = {4:.2f}"
-                    " yields sum {5:.1e}:\n\t\t\t[{6:.1e}, {7:.1e}, {8:.1e}, {9:.1e}]".format(teff, vt, logg, feh, 0.4,
+                    " yields sum {5:.1e}:\n\t\t\t[{6:.1e}, {7:.1e}, {8:.1e}, {9:.1e}]".format(teff, vt, logg, feh, alpha,
                                                                                               acquired_total_tolerance, *results))
         return results
 
     all_sampled_points = []
         
     start = time.time()
-    for i in xrange(1, 1 + max_attempts):
+    for i in range(1, 1 + max_attempts):
         sampled_points = []
         args = (sampled_points, total_tolerance, individual_tolerances, 
                 use_nlte_grid)
@@ -303,25 +295,32 @@ def optimize_stellar_parameters(initial_guess, transitions, EWs=None,
 
     pass
 
-
-def optimize_stellar_parameters_2(initial_guess, transitions, EWs=None,
-                                  alphafe=0.4,
-                                  expot_balance_species=26.0,
-                                  ionization_balance_species_1=26.0,
-                                  ionization_balance_species_2=26.1,
-                                  rew_balance_species=26.0,
-                                  mh_species=26.0,
-                                  min_eqw=0.01, max_eqw=9999.9,
-                                  min_lines=3,
-                                  sigma_clip=5,
-                                  max_attempts=9, total_tolerance=1e-4, 
-                                  individual_tolerances=None, 
-                                  maxfev=30,
-                                  rt=radiative_transfer.moog,
-                                  use_nlte_grid=None,
-                                  teff_range=(3500,7000),logg_range=(0.0,5.0),
-                                  vt_range=(0.0,4.0),mh_range=(-5.0,0.5),
-                                  twd=None):
+def optimize_stellar_parameters_2(
+        initial_guess, 
+        transitions, 
+        EWs=None,
+        alphafe=0.4,
+        expot_balance_species=26.0,
+        ionization_balance_species_1=26.0,
+        ionization_balance_species_2=26.1,
+        rew_balance_species=26.0,
+        mh_species=26.0,
+        min_eqw=0.01, 
+        max_eqw=9999.9,
+        min_lines=3,
+        sigma_clip=5,
+        max_attempts=9, 
+        total_tolerance=1e-4, 
+        individual_tolerances=None, 
+        maxfev=30,
+        rt=radiative_transfer.moog,
+        use_nlte_grid=None,
+        teff_range=(3500,7000),
+        logg_range=(0.0,5.0),
+        vt_range=(0.0,4.0),
+        mh_range=(-5.0,0.5),
+        twd=None
+):
     """
     An updated and more flexible way to optimize stellar parameters.
     
@@ -527,6 +526,7 @@ def optimize_stellar_parameters_2(initial_guess, transitions, EWs=None,
         if to_clip.sum() == 0 and not tolerance_achieved:
             # This solution will fail. Try a new starting point
             solver_guess = [np.random.uniform(*parameter_ranges[parameter]) for parameter in ["teff", "logg", "vt", "[Fe/H]"]]
+            solver_guess = np.array([np.random.uniform(*parameter_ranges[p]) for p in ['teff', 'vt', 'logg', '[Fe/H]']])[params_to_optimize]
             logger.info("No lines to clip and tolerance not achieved: trying random restart at {}".format(solver_guess))
         
         ## If to_clip.sum() > 0, then go through another sigma clipping iteration.
@@ -540,16 +540,22 @@ def optimize_stellar_parameters_2(initial_guess, transitions, EWs=None,
     logger.info("{} -> {}".format(initial_guess, final_parameters))
     return (tolerance_achieved, initial_guess, num_moog_iterations, i, t_elapsed,
             final_parameters, final_parameters_result, np.array(all_sampled_points), valid)
-    
 
 # E. Holmbeck copied the above function and basically changed teff and logg to constant.
-def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None, 
-                                jacobian=utils.approximate_feh_jacobian,
-                                rt=radiative_transfer.moog,
-                                max_attempts=5, total_tolerance=1e-4, 
-                                individual_tolerances=None, 
-                                maxfev=30, use_nlte_grid=None,
-                                ):
+def optimize_feh(
+    initial_guess, 
+    transitions, 
+    params_to_optimize, 
+    EWs=None, 
+    jacobian=utils.approximate_feh_jacobian,
+    rt=radiative_transfer.moog,
+    max_attempts=5, 
+    total_tolerance=1e-4, 
+    individual_tolerances=None, 
+    maxfev=30, 
+    use_nlte_grid=None,
+    use_FeII=False,
+):
     """
     Assumes these are all transitions you want to use for stellar parameters
     Assumes you only want to balance neutral ions against Expot and REW
@@ -599,8 +605,8 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
     else:
         parameter_ranges["vt"] = (initial_guess[1], initial_guess[1])
 
-    if params_to_optimize[2]:
-        parameter_ranges["logg"] = (0, 5),
+    if params_to_optimize[2]: # and not params_to_optimize[4]: # Holmbeck: I think I was trying to say, "Don't optimize logg independently, are you crazy?" But I don't know what "4" is supposed to have been.
+        parameter_ranges["logg"] = (0, 5)
     else:
         parameter_ranges["logg"] = (initial_guess[2], initial_guess[2])
 
@@ -608,7 +614,7 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
         parameter_ranges["[Fe/H]"] = (-5, 0.5)
     else:
         parameter_ranges["[Fe/H]"] = (initial_guess[3], initial_guess[3])
-	
+
     
     # Create a mutable copy for the initial guess
     #solver_guess = []
@@ -627,18 +633,18 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
         stellar_parameters : [teff, vt, logg, feh]
         """
         
-        params_to_optimize, all_sampled_points, total_tolerance, individual_tolerances, use_nlte_grid = args
+        params_to_optimize, all_sampled_points, total_tolerance, individual_tolerances, use_nlte_grid, use_FeII = args
 
         # Old way:
         #teff, vt, logg, feh = [initial_guess[0], stellar_parameters[0], initial_guess[2], stellar_parameters[1]]
 
         # First set all to initial_guess, then replace the ones with a "True" value	
-        params_list = initial_guess
+        params_list = np.array(initial_guess, dtype=float)
         next_param = 0
         for pi,p in enumerate(params_to_optimize):
-        	if p==True:
-        		params_list[pi] = stellar_parameters[next_param]
-        		next_param += 1
+            if p == True:
+                params_list[pi] = stellar_parameters[next_param]
+                next_param += 1
         
         teff, vt, logg, feh = params_list
 
@@ -649,10 +655,17 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
         abundances = rt.abundance_cog(photosphere,transitions,twd=twd)
         transitions["abundance"] = abundances
         
-        out = utils.equilibrium_state(transitions[idx_I],
-                                      ("expot", "reduced_equivalent_width"))
-        dAdchi = out[26.0]['expot'][0]
-        dAdREW = out[26.0]['reduced_equivalent_width'][0]
+        # E. Holmbeck changed so that dA/dREW is w.r.t. FeII
+        if use_FeII:
+            out = utils.equilibrium_state(transitions[idx_II], ("expot", "reduced_equivalent_width"))
+            species=26.1
+        else:
+            out = utils.equilibrium_state(transitions[idx_I], ("expot", "reduced_equivalent_width"))
+            species=26.0
+        logger.info("Using species: {:.1f}".format(species))
+
+        dAdchi = out[species]['expot'][0]
+        dAdREW = out[species]['reduced_equivalent_width'][0]
         dFe = np.mean(abundances[idx_I]) - np.mean(abundances[idx_II])
         # E. Holmbeck changed dM to be w.r.t. FeII abundances.
         dM  = np.mean(abundances[idx_II]) - (feh + solar_composition("Fe"))
@@ -671,11 +684,11 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
     all_sampled_points = []
     
     start = time.time()
-    for i in xrange(1, 1 + max_attempts):
+    for i in range(1, 1 + max_attempts):
         sampled_points = []
         args = (params_to_optimize, sampled_points, total_tolerance, individual_tolerances, 
-                use_nlte_grid)
-	
+                use_nlte_grid, use_FeII)
+
         try:
             results = fsolve(minimisation_function, solver_guess, args=args, fprime=utils.approximate_feh_jacobian,
                              col_deriv=1, epsfcn=0, xtol=1e-10, full_output=1, maxfev=maxfev)
@@ -704,7 +717,13 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
             #ier, mesg = results[-len(sampled_points)/2:]
             ier, mesg = results[-2:]
             
-            final_parameters = (results[0]*params_to_optimize) + (initial_guess*(-1*params_to_optimize + 1))
+            # E. Holmbeck updated this
+            final_parameters = [] #(results[0]*params_to_optimize) + (initial_guess*(-1*params_to_optimize + 1))
+            iter_results = iter(results[0])
+            for pi in range(len(params_to_optimize)):
+                if params_to_optimize[pi]: final_parameters.append(next(iter_results))
+                else: final_parameters.append(initial_guess[pi])
+                        
             final_parameters[0] = int(np.round(final_parameters[0])) # Effective temperature
             final_parameters_result = results[1]["fvec"]
             num_moog_iterations = len(sampled_points)
@@ -720,7 +739,8 @@ def optimize_feh(initial_guess, transitions, params_to_optimize, EWs=None,
                 # This solution will fail. Try a new starting point
                 # It should select a new point where teff and logg are constant though...
                 #solver_guess = [teff, np.random.uniform(*parameter_ranges["vt"]), logg, np.random.uniform(*parameter_ranges["[Fe/H]"])]
-                solver_guess = [np.random.uniform(*parameter_ranges[parameter]) for parameter in ['teff', 'vt', 'logg', '[Fe/H]']]
+                # solver_guess = [np.random.uniform(*parameter_ranges[parameter]) for parameter in ['teff', 'vt', 'logg', '[Fe/H]']]
+                solver_guess = np.array([np.random.uniform(*parameter_ranges[p]) for p in ['teff', 'vt', 'logg', '[Fe/H]']])[params_to_optimize]
                 
         t_elapsed = time.time() - start
 

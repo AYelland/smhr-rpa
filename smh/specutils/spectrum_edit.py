@@ -16,7 +16,8 @@ from collections import OrderedDict
 from hashlib import md5
 
 from astropy.io import fits
-from scipy import interpolate, ndimage, polyfit, poly1d, optimize as op
+from scipy import interpolate, ndimage, optimize as op
+from numpy import polyfit, poly1d
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +265,7 @@ class Spectrum1D(object):
         # Parse the order mapping into dispersion values.
         # Do it this way to ensure ragged arrays work
         num_pixels, num_orders = metadata["NAXIS1"], metadata["NAXIS2"]
-        dispersion = np.zeros((num_orders, num_pixels), dtype=np.float) + np.nan
+        dispersion = np.zeros((num_orders, num_pixels), dtype=float) + np.nan
         for j in range(num_orders):
             _dispersion = compute_dispersion(*order_mapping[j])
             dispersion[j,0:len(_dispersion)] = _dispersion
@@ -506,7 +507,7 @@ class Spectrum1D(object):
         
         if not filename.endswith('fits'):
             a = np.array([self.dispersion, self.flux, self.ivar]).T
-            np.savetxt(filename, a, fmt="%.4f".encode('ascii'))
+            np.savetxt(filename, a, fmt="%.4f")
             return
         
         else:
@@ -576,7 +577,7 @@ class Spectrum1D(object):
                     try:
                         hdu.header[key] = value
                     except ValueError:
-                        #logger.warn("Could not save header key/value combination: %s = %s" % (key, value, ))
+                        #logger.warning("Could not save header key/value combination: %s = %s" % (key, value, ))
                         print("Could not save header key/value combination: %s = %s".format(key, value))
                 hdulist = fits.HDUList([hdu,hdu2])
                 hdulist.writeto(filename, output_verify=output_verify, clobber=clobber)
@@ -894,7 +895,7 @@ class Spectrum1D(object):
 
             if function == 'spline':
                 if order > 5:
-                    logger.warn("Splines can only have a maximum order of 5. "
+                    logger.warning("Splines can only have a maximum order of 5. "
                         "Limiting order value to 5.")
                     order = 5
 

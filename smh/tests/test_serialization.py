@@ -1,28 +1,30 @@
 from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
 
-import os, time
-from nose.tools import assert_equals, assert_almost_equals, ok_
+import os
+import time
 
 from smh import Session, LineList
 import smh.spectral_models as sm
-import cPickle as pickle
+import pickle
 
 datadir = os.path.dirname(os.path.abspath(__file__))+'/test_data'
 
-def test_serialize_linelist():
+def test_serialize_linelist(tmp_path):
     ll = LineList.read(datadir+"/linelists/complete.list")
-    file_to_write_to = datadir+"/.test.serialize.linelist.pkl" 
-    with open(file_to_write_to, "w") as fp:
+    file_to_write_to = tmp_path / "serialize.linelist.pkl"
+    with open(file_to_write_to, "wb") as fp:
         pickle.dump(ll, fp)
-    with open(file_to_write_to, "r") as fp:
+    with open(file_to_write_to, "rb") as fp:
         loaded_ll = pickle.load(fp)
+    assert len(loaded_ll) == len(ll)
     
 def test_load_serialized_linelist():
     ## previously dumped complete.list to this file
     file_to_load = datadir+"/test_load_serialized_linelist.pkl" 
-    with open(file_to_load, "r") as fp:
-        ll = pickle.load(fp)
+    with open(file_to_load, "rb") as fp:
+        ll = pickle.load(fp, encoding="latin1")
+    assert len(ll) > 0
     
 if __name__=="__main__":
     test_serialize_linelist()
@@ -40,7 +42,7 @@ if __name__=="__main__":
     start = time.time()
     fname = "./complete.pkl"
     for i in range(Niter):
-        with open(fname, "w") as fp:
+        with open(fname, "wb") as fp:
             pickle.dump(ll, fp)
     end = time.time()-start
     print( fmt.format("pkl", "save", end, Niter, end/Niter) )
@@ -48,7 +50,7 @@ if __name__=="__main__":
     start = time.time()
     fname = "./complete.pkl"
     for i in range(Niter):
-        with open(fname, "r") as fp:
+        with open(fname, "rb") as fp:
             _ll = pickle.load(fp)
     end = time.time()-start
     print( fmt.format("pkl", "load", end, Niter, end/Niter) )
