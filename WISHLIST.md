@@ -2,16 +2,12 @@
 
 **WISHLIST**
 
-
-
-
 *Long-term issues which are high priority (e.g., improve gradually over time):*
 - [X] Travis to be faster (e.g., temporarily remove Py3 dependency)
 - [X] Coveralls running
 - [ ] Unit test improvements
 - [ ] Document string improvements
 - [ ] Some documentation on the data model.
-
 
 *Hard*:
 - [X] Widget for when an exception occurs, asking to submit GH issue. Catch all GUI-related exceptions with this. #gui
@@ -44,7 +40,6 @@
 - [ ] Refactor method names in tabs to make them more consistent (e.g., _populate_widgets, redraw_*, __init_ui__)
 - [ ] Least-recently-used cacher for the stellar photosphere.
 - [X] A widget to select element(s) from a list that will be part of a synthesis.
-
 
 *Easy*:
 - [ ] Double-click on a spectral model in the Transitions Dialog will switch to the line list tab and highlight which line list row(s) are associated with that spectral model.

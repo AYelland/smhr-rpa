@@ -1079,7 +1079,7 @@ class Session(BaseSession):
         start = time.time()
         saved_stellar_params = deepcopy(self.metadata["stellar_parameters"])
         
-        # Use abundance errors in fit? Should just not use this by default for now
+        # Use abundance errors in fit when they are available.
         if self.setting(("stellar_parameter_inference", 
             "use_abundance_uncertainties_in_line_fits"), False):
             yerr_column = "abundance_uncertainty"
@@ -1115,6 +1115,14 @@ class Session(BaseSession):
             assert np.all(eqws > .01), np.sum(eqws <= .01)
             for needed_col in ["abundance", "expot", "reduced_equivalent_width"]:
                 assert needed_col in transitions.colnames, needed_col
+
+        if yerr_column is not None and yerr_column not in transitions.colnames:
+            logger.warning(
+                "Abundance uncertainties are enabled for line fits, but the "
+                "transitions table has no '%s' column; using equal weights.",
+                yerr_column)
+            yerr_column = None
+
         initial_slopes = utils.equilibrium_state(transitions, columns=("expot", "reduced_equivalent_width"),
                                                  ycolumn="abundance", yerr_column=yerr_column)
         

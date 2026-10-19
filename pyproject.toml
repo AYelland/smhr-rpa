@@ -35,10 +35,13 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/andycasey/smhr"
+Homepage = "https://github.com/AYelland/smhr-rpa"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
-"" = ["LICENSE"]
 smh = ["default_session.yaml"]
 "smh.gui" = ["matplotlibrc"]
 "smh.photospheres" = [

@@ -1,83 +1,72 @@
 [![Build Status](https://travis-ci.org/andycasey/smhr.svg?branch=master)](https://travis-ci.org/andycasey/smhr)
 
-Spectroscopy Made Harder
+# Spectroscopy Made Harder
 ------------------------
 Gotta pay back that tech debt.
 
 
-Authors
+## Authors
 -------
  - Andrew R. Casey (Monash)
  - Alex Ji (University of Chicago)
  - Erika Holmbeck (Lawrence Livermore National Laboratory)
 
-Installation
+## Installation
 ------------
 
-* Get anaconda https://www.anaconda.com/
+This version of SMHR requires Python 3.14 or newer. Clone the repository and change into its
+directory before choosing one of the environment setup methods below:
 
-* Create a new environment and install required libraries:
-For M1 macs, note that pyside2 has to be run in Rosetta. Thus, you can install it in this way:
 ```
-conda create -c conda-forge/osx-64 --name smhr-py3 python=3.8 scipy numpy=1.22.4 matplotlib=3.1.3 six astropy ipython python.app requests pyside2=5.13.2 yaml
-```
-Currently (as of May 2022) anaconda on M1/ARM chips by default includes channels that search through `osx-arm64` and `noarch` but not `osx-64`.
-Also, newer versions of pyside2 appear to have changed some syntax on dialog boxes. We will update this eventually but for now you can install the older pyside2 version.
-
-For older Macs or other computers, this worked fine:
-```
-conda create -c conda-forge --name smhr-py3 python=3.8 scipy numpy=1.22.4 matplotlib=3.1.3 six astropy ipython python.app requests
-conda activate smhr-py3
-conda install -c conda-forge pyside2=5.13.2
-conda install -c conda-forge yaml
+git clone https://github.com/AYelland/smhr-rpa.git
+cd smhr-rpa
 ```
 
-* Download and install this branch:
+### Creating a Python Environment
+
+#### Conda
+
+Create and activate a Conda environment, then install SMHR with pip. The
+dependencies are declared in `pyproject.toml`; using pip here ensures that the
+same dependency set is installed regardless of the Conda platform:
+
 ```
-git clone https://github.com/andycasey/smhr.git 
-cd smhr
-python setup.py develop
+conda create -n smhr-rpa python=3.14 pip
+conda activate smhr-rpa
+python -m pip install .
 ```
-Due to data not being copied, it is best to do `develop` instead of install. Someday we will fix this.
+
+#### pip and venv
+
+Create a virtual environment with Python 3.14 or newer, activate it, and
+install the project in editable mode:
+
+```
+python3.14 -m venv .venv
+source .venv/bin/activate
+pip install .
+```
+
+#### uv
+
+Install [uv](https://docs.astral.sh/uv/), then let it create the environment and install the exact versions recorded in `uv.lock`:
+
+```
+uv sync
+```
 
 * Try running it:
 ```
-cd smh/gui
-pythonw __main__.py #pythonw is installed with python.app and fixes menubar issues
+# Using the `python` command...
+python smh/gui/__main__.py
+
+# or, using uv...
+uv run smh/gui/__main__.py 
 ```
 
-Note: you can also open smhr with `python` or `ipython`, but the menu bar may not work.
-It appears you can fix this by clicking outside SMHR then clicking back in. But using `pythonw` is better.
-Details: https://stackoverflow.com/questions/48738805/mac-pyqt5-menubar-not-active-until-unfocusing-refocusing-the-app
+Note: There is a chance the GUI menu bar does not behave correctly on macOS. If this happens to you, try using `pythonw` instead of `python` if your Python distribution provides it.
 
 * Install moog17scat (see below) and add it to your path.
-
-* Some installation notes for Linux/Debian. It takes a very long time to install pyside2 (hours?) so be patient. Thanks to Shivani Shah and Terese Hansen for this information.
-```
-Install Python 3.7 from anaconda
-
-create a new environment for smhr-py3:
-> conda create --name smhr-py3 python=3.8 scipy numpy=1.22.4 matplotlib=3.1.3 six astropy ipython requests
-
-Activate environment:
-> conda activate smhr-py3
-
-Install pyside2:
-> conda install -c conda-forge pyside2=5.13.2
-
-
-Install yaml
-> conda install -c conda-forge yaml
-
-Get smhr:
-> git clone https://github.com/andycasey/smhr.git 
-> cd smhr
-> python setup.py develop
-
-Start smhr:
-> cd smh/gui
-> ipython __main__.py
-```
 
 MOOG
 ----

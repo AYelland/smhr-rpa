@@ -368,8 +368,10 @@ class StellarParametersTab(QtWidgets.QWidget):
         return None
     def sperrors_dialog(self):
         """ Open a GUI for the stellar parameter errors. """
-        result = StellarParameterUncertaintiesDialog(self.parent.session).exec()
-        self.update_parameter_errors()
+        dialog = StellarParameterUncertaintiesDialog(self.parent.session)
+        result = dialog.exec()
+        if result == QtWidgets.QDialog.DialogCode.Accepted:
+            self.update_parameter_errors()
         return result
     def solve_parameters(self):
         """ Solve the stellar parameters. """
@@ -984,14 +986,22 @@ class StellarParameterUncertaintiesDialog(QtWidgets.QDialog):
         tols = [float(x.text()) for x in [self.edit_tol_Teff, self.edit_tol_logg, self.edit_tol_vt]]
         syserrs = [float(x.text()) for x in [self.edit_syserr_Teff, self.edit_syserr_logg,
                                              self.edit_syserr_vt, self.edit_syserr_MH]]
-        staterr_Teff, staterr_logg, staterr_vt, staterr_MH = self.session.stellar_parameter_uncertainty_analysis(
-            tolerances=tols, systematic_errors=syserrs)
+        original_staterrs = self.session.stellar_parameters_staterr
+        original_syserrs = self.session.stellar_parameters_syserr
+        try:
+            staterr_Teff, staterr_logg, staterr_vt, staterr_MH = \
+                self.session.stellar_parameter_uncertainty_analysis(
+                    tolerances=tols, systematic_errors=syserrs)
+        finally:
+            self.session.set_stellar_parameters_errors(
+                "stat", *original_staterrs)
+            self.session.set_stellar_parameters_errors(
+                "sys", *original_syserrs)
         self.label_staterr_Teff.setText("{:.0f}".format(staterr_Teff))
         self.label_staterr_logg.setText("{:.2f}".format(staterr_logg))
         self.label_staterr_MH.setText("{:.2f}".format(staterr_MH))
         self.label_staterr_vt.setText("{:.2f}".format(staterr_vt))
         self.btn_staterr.setText("Calculate Stat Err")
-        self.save_to_session()
     def save_to_session(self):
         self.session.set_stellar_parameters_errors("stat",
             float(self.label_staterr_Teff.text()),
@@ -1010,5 +1020,5 @@ class StellarParameterUncertaintiesDialog(QtWidgets.QDialog):
         Save to session metadata
         """
         self.save_to_session()
-        self.close()
+        self.accept()
         
