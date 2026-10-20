@@ -10,6 +10,7 @@ Gotta pay back that tech debt.
  - Andrew R. Casey (Monash)
  - Alex Ji (University of Chicago)
  - Erika Holmbeck (Lawrence Livermore National Laboratory)
+ - Alexander Yelland (Massachusetts Institute of Technology)
 
 ## Installation
 ------------
@@ -31,8 +32,8 @@ dependencies are declared in `pyproject.toml`; using pip here ensures that the
 same dependency set is installed regardless of the Conda platform:
 
 ```
-conda create -n smhr-rpa python=3.14 pip
-conda activate smhr-rpa
+conda create -n smhr-env python=3.14 pip
+conda activate smhr-env
 python -m pip install .
 ```
 
@@ -64,12 +65,24 @@ python smh/gui/__main__.py
 uv run smh/gui/__main__.py 
 ```
 
-Note: There is a chance the GUI menu bar does not behave correctly on macOS. If this happens to you, try using `pythonw` instead of `python` if your Python distribution provides it.
+#### Additional Installation Comments
 
-* Install moog17scat (see below) and add it to your path.
+To make your life easier in the future, such that you don't have to remember how to run the GUI, I recommend adding these lines to your `.zshrc` (or modifying them for your appropriate shell configuration file).
+```
+alias smhr-rpa-env_conda='conda activate smhr-env'
+alias smhr-rpa-gui_conda='conda activate smhr-env; cd ~/path_to_smhr/smhr-rpa/smh/gui; python __main__.py; cd -; conda deactivate'
 
-MOOG
-----
+alias smhr-rpa-env_venv='source ~/path_to_smhr/smhr-rpa/.venv/bin/activate'
+alias smhr-rpa-gui_venv='cd ~/path_to_smhr/smhr-rpa/smh/gui; python __main__.py; cd -'
+
+alias smhr-env='echo "Running smhr-rpa Environment"; smhr-rpa-env_venv' # change to appropiate above alias
+alias smhr-gui='echo "Running smhr-rpa GUI"; smhr-rpa-env_venv; smhr-rpa-gui_venv; deactivate' # change to appropiate above alias
+```
+
+Additionally, there is a chance the GUI menu bar does not behave correctly on macOS. If this happens to you, try using `pythonw` instead of `python` if your Python distribution provides it.
+
+### Installing MOOG (moog17scat) and adding it to your path.
+
 It is currently recommended that you use this version of MOOG: https://github.com/alexji/moog17scat
 
 Follow the usual MOOG installation instructions. When you compile MOOG, make sure that you have not activated any anaconda environments, because it can mess up the gfortran flags.
@@ -83,8 +96,9 @@ See the README for `moog17scat` if you have concerns.
 (Note May 2022: Alex has updated the master branch of moog17scat so this is done by default.)
 
 
-VERSION HISTORY:
+## VERSION HISTORY:
 ----------------
+- (this part of the README is outdated and needs updated...)
 - The current master branch is python 3.
 - March 5, 2024: starting from 4b7732ceaff1ba1bff9e5c36b891b2c0a8ab03a3, Alex has updated the mean abundances. Two important changes: (1) on the stellar parameters tab the average [Fe I,II/H] was previously reported as the median abundance. It now shows the mean abundance in parentheses. (2) on the review tab and in previous abundance summaries, I had mistakenly applied a weight based on the statistical uncertainty instead of using the straight mean abundance. It now uses no weights to calculate the mean.
 - Alex has ported SMHR to python 3 in branch `py38-mpl313`. It now uses pyside2 and updated libraries for matplotlib. It is also way easier to install, not relying on some obscure libraries that were no longer maintained. Also added damping selection.
