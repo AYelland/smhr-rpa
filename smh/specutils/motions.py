@@ -511,7 +511,9 @@ def corrections_from_headers(headers):
             bcv_shift = dop_cor-vhelio
             logging.warn("Couldn't find VHELIO but found DOPCOR.")
             shift_tellurics = False
-        except: return corrections(long_obs, lat_obs, alt_obs, ra, dec, mjd), True
+        except:
+            v_bary, v_helio = corrections(
+                long_obs, lat_obs, alt_obs, ra, dec, mjd)
+            return v_helio, v_bary, True
     # ---------------------------------------------------------------------
     return vhelio, bcv_shift, True
-

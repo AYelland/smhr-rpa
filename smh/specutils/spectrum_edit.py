@@ -573,7 +573,7 @@ class Spectrum1D(object):
                     'CDELT1': cdelt1
                 })
                 
-                for key, value in headers.iteritems():
+                for key, value in headers.items():
                     try:
                         hdu.header[key] = value
                     except ValueError:

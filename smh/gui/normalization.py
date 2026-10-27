@@ -966,6 +966,12 @@ class NormalizationTab(QtWidgets.QWidget):
         Make updates to the view when the radial velocity applied has been
         updated. Keep masks.
         """
+        # A session can be opened without an existing measured/applied RV.
+        # In that case the main window returns before populating this tab, but
+        # the first RV correction still needs the normalization cache.
+        if not hasattr(self, "_cache"):
+            self._populate_widgets()
+
         # Holmbeck: HACKY; this should be shifting the terrestrial lines by the rv_diff
         rv_applied = self.parent.session.metadata["rv"].get("rv_applied", 0.0)
         # These come pre-loaded

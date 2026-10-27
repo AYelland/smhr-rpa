@@ -803,7 +803,6 @@ class Spectrum1D(object):
             return
         
         else:
-
             crpix1, crval1 = 1, self.dispersion.min()
             cdelt1 = np.mean(np.diff(self.dispersion))
             naxis1 = len(self.dispersion)
@@ -829,25 +828,25 @@ class Spectrum1D(object):
                 ## http://www.cv.nrao.edu/fits/
                 ## http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?specwcs
                 
-                ## python 2(?) hack needs the b prefix
-                ## https://github.com/numpy/numpy/issues/2407
-                
                 headers = {}
 
-                dispcol = fits.Column(name=b"WAVELENGTH[COORD]",
-                                      format="D",
-                                      array=self.dispersion)
-                fluxcol = fits.Column(name=b"SPECTRUM[FLUX]",
-                                      format="D",
-                                      array=self.flux)
-                errscol = fits.Column(name=b"SPECTRUM[SIGMA]",
-                                      format="D",
-                                      array=(self.ivar)**-0.5)
+                dispcol = fits.Column(
+                    name="WAVELENGTH[COORD]",
+                    format="D",
+                    array=self.dispersion)
+                fluxcol = fits.Column(
+                    name="SPECTRUM[FLUX]",
+                    format="D",
+                    array=self.flux)
+                errscol = fits.Column(
+                    name="SPECTRUM[SIGMA]",
+                    format="D",
+                    array=(self.ivar)**-0.5)
                 
                 coldefs = fits.ColDefs([dispcol, fluxcol, errscol])
                 hdu = fits.BinTableHDU.from_columns(coldefs)
                 hdu.header.update(headers)
-                hdu.writeto(filename, output_verify=output_verify, clobber=clobber)
+                hdu.writeto(filename, output_verify=output_verify, overwrite=clobber)
 
                 return
 
@@ -865,14 +864,14 @@ class Spectrum1D(object):
                     'CDELT1': cdelt1
                 })
                 
-                for key, value in headers.iteritems():
+                for key, value in headers.items():
                     try:
                         hdu.header[key] = value
                     except ValueError:
                         #logger.warning("Could not save header key/value combination: %s = %s" % (key, value, ))
-                        print("Could not save header key/value combination: %s = %s".format(key, value))
+                        print(f"Could not save header key/value combination: {key} = {value}")
                 hdulist = fits.HDUList([hdu,hdu2])
-                hdulist.writeto(filename, output_verify=output_verify, clobber=clobber)
+                hdulist.writeto(filename, output_verify=output_verify, overwrite=clobber)
                 return
 
     def redshift(self, v=None, z=None, reinterpolate=False):

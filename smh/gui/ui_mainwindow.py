@@ -73,7 +73,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         star_name = re.sub(r'[\\/:*?"<>|]+', "_", star_name).strip(" ._")
         return "{}_{}".format(star_name, filename) if star_name else filename
 
-
     def __init_menus__(self):
         """
         Initialize main window menus and associated actions.
@@ -199,8 +198,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 
         return True
 
-
-
     def closeEvent(self, event):
         """
         Check to see if the user wants to save their session before closing.
@@ -225,9 +222,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             event.ignore()
 
         return None
-
-
-
 
     def new_session(self, filenames=None):
         """
@@ -302,7 +296,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         
         return None
 
-
     def _update_window_title(self, default_title="Unnamed"):
         """
         Update the window title.
@@ -325,7 +318,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle(title)
 
         return None
-
 
     def open_session(self, path=None):
         """ Open existing session. """
@@ -402,7 +394,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.session.save(self.session_path, overwrite=True)
         return None
 
-
     def save_session_as(self, path=None):
         """
         Save session as new filename.
@@ -420,7 +411,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.session_path = path
         self.save_session()
         return None
-
 
     def show_balmer_line_dialog(self):
         """ Show an interactive dialog for fitting Balmer line profiles. """
@@ -450,14 +440,13 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 
         return None
 
-
     def export_normalized_spectrum(self):
         """ Export a normalized, rest-frame spectrum. """
         if self.session is None: return
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
             caption="Enter normalized rest frame spectrum filename",
-            dir=self._default_filename("normalized_spectrum.fits"),
-            filter="FITS spectrum (*.fits);;All files (*)")
+            dir=self._default_filename("normalized_spectrum.txt"),
+            filter="Text spectrum (*.txt);;All files (*)")
         if not path: return
         self.session.export_normalized_spectrum(path)
 
@@ -466,8 +455,8 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         if self.session is None: return
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
             caption="Enter unnormalized rest frame spectrum filename",
-            dir=self._default_filename("unnormalized_spectrum.fits"),
-            filter="FITS spectrum (*.fits);;All files (*)")
+            dir=self._default_filename("unnormalized_spectrum.txt"),
+            filter="Text spectrum (*.txt);;All files (*)")
         if not path: return
         self.session.export_unnormalized_spectrum(path)
 
@@ -476,8 +465,8 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         if self.session is None: return
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
             caption="Enter continuum filename",
-            dir=self._default_filename("stitched_continuum.fits"),
-            filter="FITS spectrum (*.fits);;All files (*)")
+            dir=self._default_filename("stitched_continuum.txt"),
+            filter="Text spectrum (*.txt);;All files (*)")
         if not path: return
         self.session.export_stitched_continuum(path)
 
@@ -491,7 +480,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
             num_models, logeps, stdev, stderr, XH, XFe = summary_dict[key]
             print("{:7.1f} {:3} {:6.2f} {:4.2f} {:5.2f} {:6.2f}".format(key,num_models,logeps,stdev,XH,XFe))
 
-    
     def export_abundance_table(self):
         if self.session is None: return
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
@@ -527,7 +515,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
 
         return None
 
-
     def isotopes_manager(self):
         """
         Open the isotopes manager dialog.
@@ -535,7 +522,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         window = IsotopeDialog(self.session)
         window.exec()
         return None
-
 
     def comparison_spectrum_dialog(self):
         """
@@ -549,7 +535,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.chemical_abundances_tab.figure.update_comparison_spectrum(spectrum)
         return None
 
-
     def clear_comparison_spectrum(self):
         """
         Remove the comparison spectrum
@@ -557,7 +542,6 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
         self.stellar_parameters_tab.specfig.update_comparison_spectrum(None)
         self.chemical_abundances_tab.figure.update_comparison_spectrum(None)
         return None
-
 
     def summary_plot(self):
         """

@@ -1,6 +1,5 @@
 from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
-from six import iteritems
 
 import numpy as np
 import pickle
@@ -30,7 +29,7 @@ def pretty_print_isotopes(isotopes):
     outstr = ""
     for elem in isotopes:
         outstr += str(elem)+': '
-        for A,frac in iteritems(isotopes[elem]):
+        for A,frac in isotopes[elem].items():
             outstr += '({},{:.3f}) '.format(A,frac)
         outstr += '\n'
     return outstr
@@ -91,7 +90,7 @@ def find_isotopes_to_replace(needed_isotopes, new_isotopes):
     """
     missing_isotopes = {}
     found_isotopes = {}
-    for elem,isos in iteritems(needed_isotopes):
+    for elem,isos in needed_isotopes.items():
         if elem not in new_isotopes:
             missing_isotopes[elem] = {0:np.nan}
         else:
@@ -143,7 +142,7 @@ def identify_needed_isotopes(ll,include_molecules=False):
     """
     isotopes = identify_isotopes(ll,include_molecules)
     needed_isotopes = {}
-    for elem,isos in iteritems(isotopes):
+    for elem,isos in isotopes.items():
         if len(isos) > 1:
             needed_isotopes[elem] = isos
     return needed_isotopes

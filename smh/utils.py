@@ -269,7 +269,7 @@ def spectral_model_conflicts(spectral_models, line_list):
 
     # Which of the transition_hashes appear more than once?
     conflicts = []
-    for transition_hash, indices in transition_hashes.iteritems():
+    for transition_hash, indices in transition_hashes.items():
         if len(indices) < 2: continue
 
         # OK, what element is this transition?
