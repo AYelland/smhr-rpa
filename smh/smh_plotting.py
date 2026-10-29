@@ -188,7 +188,7 @@ def make_summary_plot(summary_figure, normalized_spectrum, figure=None):
     return figure
 
 def make_snr_plot(normalized_spectrum, figure=None):
-    if figure==None: 
+    if figure is None:
         figure = plt.figure(figsize=(10,8))
     figure.subplots_adjust(left=0.10, right=0.95)
     figure.patch.set_facecolor("w")
@@ -197,9 +197,10 @@ def make_snr_plot(normalized_spectrum, figure=None):
     ax.plot(_wavelength(normalized_spectrum), np.sqrt(normalized_spectrum.ivar), lw=1, color='k')
     ax.set_xlabel("Wavelength (A)", fontdict={"fontsize":12})
     ax.set_ylabel("SNR = sqrt(ivar)", fontdict={"fontsize":12})
-    ax.set_xticklabels(ax.get_xticks(), fontdict={"fontsize":12})
-    ax.set_yticklabels(ax.get_yticks(), fontdict={"fontsize":12})
-    ax.tick_params(which="both", direction="in", top=True, right=True)
+    ax.tick_params(
+        which="both", direction="in", top=True, right=True,
+        labelsize=12
+    )
     return figure
 
 def make_synthesis_plot(

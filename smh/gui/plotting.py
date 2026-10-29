@@ -11,7 +11,7 @@ import os
 import sys
 from PySide6 import QtCore, QtWidgets
 
-import mpl
+from smh.gui import mpl
 from matplotlib import (gridspec, pyplot as plt)
 # E. Holmbeck added this line to account for a newer version of matplotlib
 plt.rcParams['errorbar.capsize'] = 3
@@ -21,10 +21,13 @@ from smh.linelists import LineList
 import logging
 logger = logging.getLogger(__name__)
 
-__all__ = ["SummaryPlotDialog"]
+__all__ = ["SummaryPlotDialog", "SNRPlotDialog"]
 
 
-def _star_prefixed_filename(session, filename):
+def _star_prefixed_filename(
+    session: Session,
+    filename: str
+):
     try:
         star_name = str(session.metadata["OBJECT"]).strip()
     except (AttributeError, KeyError, TypeError):
@@ -35,7 +38,12 @@ def _star_prefixed_filename(session, filename):
     return "{}_{}".format(star_name, filename) if star_name else filename
 
 
-def _add_save_button(dialog, layout, figure_widget, default_name):
+def _add_save_button(
+    dialog: QtWidgets.QDialog, 
+    layout: QtWidgets.QLayout, 
+    figure_widget: mpl.MPLWidget, 
+    default_name: str
+):
     button = QtWidgets.QPushButton("Save Plot...", dialog)
     button.clicked.connect(
         lambda: _save_figure(dialog, figure_widget.figure, default_name)
@@ -43,7 +51,11 @@ def _add_save_button(dialog, layout, figure_widget, default_name):
     layout.addWidget(button)
 
 
-def _save_figure(dialog, figure, default_name):
+def _save_figure(
+    dialog: QtWidgets.QDialog, 
+    figure: plt.Figure, 
+    default_name: str
+):
     path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
         dialog,
         caption="Save plot",
@@ -64,7 +76,12 @@ def _save_figure(dialog, figure, default_name):
     figure.savefig(path)
 
 class SummaryPlotDialog(QtWidgets.QDialog):
-    def __init__(self, session, parent, ncap=False):
+    def __init__(
+        self, 
+        session: Session, 
+        parent: QtWidgets.QWidget, 
+        ncap: bool = False
+    ):
         super(SummaryPlotDialog, self).__init__()
         # Center it on the parent location
         rect = parent.geometry()
@@ -89,7 +106,12 @@ class SummaryPlotDialog(QtWidgets.QDialog):
             )
         
 class SNRPlotDialog(QtWidgets.QDialog):
-    def __init__(self, session, parent, ncap=False):
+    def __init__(
+        self, 
+        session: Session, 
+        parent: QtWidgets.QWidget, 
+        ncap: bool = False
+    ):
         super(SNRPlotDialog, self).__init__()
         # Center it on the parent location
         rect = parent.geometry()
