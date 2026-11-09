@@ -10,8 +10,9 @@ import logging
 import numpy as np
 import os
 import signal
+import shutil
 import subprocess
-#import tempfile
+import tempfile
 
 from smh.photospheres.abundances import asplund_2009 as solar_composition
 from smh.utils import elems_isotopes_ion_to_species, element_to_atomic_number
@@ -101,8 +102,21 @@ def moogsilent(input_filename, cwd=None, timeout=30, shell=False, env=None,
     if cwd is None:
         cwd = os.path.dirname(input_filename)
     
-    if env is None and len(os.path.dirname(moogsilent_path)) > 0:
-        env = {"PATH": os.path.dirname(moogsilent_path)}
+    if env is None:
+        env = os.environ.copy()
+        moog_directory = os.path.dirname(os.fsdecode(moogsilent_path))
+        command_directory = tempfile.mkdtemp(prefix="smh-moog-bin-")
+        for command, target in (("\\rm", shutil.which("rm")), ("clear", shutil.which("true"))):
+            if target is not None:
+                os.symlink(target, os.path.join(command_directory, command))
+        if moog_directory:
+            env["PATH"] = os.pathsep.join(
+                [command_directory, moog_directory, env.get("PATH", "")]
+            )
+        else:
+            env["PATH"] = os.pathsep.join(
+                [command_directory, env.get("PATH", "")]
+            )
 
     p = subprocess.Popen([os.path.basename(moogsilent_path)], 
         shell=shell, bufsize=2056, cwd=cwd, 
@@ -128,6 +142,9 @@ def moogsilent(input_filename, cwd=None, timeout=30, shell=False, env=None,
         if timeout != -1:
             signal.alarm(0)
 
+        if env is not None and "command_directory" in locals():
+            shutil.rmtree(command_directory)
+
     except Alarm:
 
         # process might have died before getting to this line
@@ -136,6 +153,8 @@ def moogsilent(input_filename, cwd=None, timeout=30, shell=False, env=None,
             os.kill(p.pid, signal.SIGKILL)
         except OSError:
             pass
+        if env is not None and "command_directory" in locals():
+            shutil.rmtree(command_directory)
         return (-9, '', '')
 
     return (p.returncode, stdout, stderr)

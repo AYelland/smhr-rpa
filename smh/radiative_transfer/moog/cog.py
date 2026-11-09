@@ -103,11 +103,15 @@ def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
 
     # Returned normally?
     if code != 0:
+        output = strip_control_characters(out).strip()
+        errors = strip_control_characters(err).strip()
         logger.error("MOOG returned the following standard output:")
-        logger.error(out)
+        logger.error(output)
         logger.error("MOOG returned the following errors (code: {0:d}):".format(code))
-        logger.error(err)
-        logger.exception(RTError(err))
+        logger.error(errors)
+        raise RTError(
+            "MOOG failed with return code {}: {}".format(
+                code, errors or output or "no diagnostic output"))
     else:
         logger.info("MOOG executed {0} successfully".format(moog_in))
         #logger.debug("Standard output:")
@@ -119,17 +123,26 @@ def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     transitions_array, linear_fits = _parse_abfind_summary(kwds["summary_out"])
 
     if len(transitions_array)==0:
+        output = strip_control_characters(out).strip()
+        errors = strip_control_characters(err).strip()
         logger.debug("Standard output:")
-        logger.debug(strip_control_characters(out))
+        logger.debug(output)
         logger.debug("Standard error:")
-        logger.debug(err.rstrip())
-        raise RTError("No measurements returned!")
+        logger.debug(errors)
+        raise RTError(
+            "No measurements returned by MOOG: {}".format(
+                errors or output or "no diagnostic output"))
     if len(transitions_array)!=len(transitions):
+        output = strip_control_characters(out).strip()
+        errors = strip_control_characters(err).strip()
         logger.debug("Standard output:")
-        logger.debug(strip_control_characters(out))
+        logger.debug(output)
         logger.debug("Standard error:")
-        logger.debug(err.rstrip())
-        raise RTError("Num lines returned {} != {} Num lines input".format(len(transitions_array),len(transitions)))
+        logger.debug(errors)
+        raise RTError(
+            "MOOG returned {} measurements for {} input lines: {}".format(
+                len(transitions_array), len(transitions),
+                errors or output or "no diagnostic output"))
     
     if all_positive_loggf:
         # Remove the fakeline
@@ -161,12 +174,10 @@ def abundance_cog(photosphere, transitions, full_output=False, verbose=False,
     #raise NotImplementedError
 
 def strip_control_characters(out):
-    try:
-        for x in np.unique(re.findall(r"\x1b\[K|\x1b\[\d+;1H",out)):
-            out = out.replace(x,'')
-    except TypeError:
-        for x in np.unique(re.findall(r"\x1b\[K|\x1b\[\d+;1H", out.decode("ascii"))):
-            out = out.replace(x, '')
+    if isinstance(out, bytes):
+        out = out.decode("ascii", errors="replace")
+    for x in np.unique(re.findall(r"\x1b\[K|\x1b\[\d+;1H", out)):
+        out = out.replace(x, "")
     return out
 
 def _parse_abfind_summary(summary_out_path):
