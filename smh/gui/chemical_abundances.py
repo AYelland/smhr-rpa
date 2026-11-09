@@ -220,7 +220,7 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Minimum
         )
         self.btn_fit_all = QtWidgets.QPushButton(self)
-        self.btn_fit_all.setText("Fit all EW")
+        self.btn_fit_all.setText("Fit all acceptable EW")
         self.btn_fit_all.setSizePolicy(sp)
         self.btn_measure_all = QtWidgets.QPushButton(self)
         self.btn_measure_all.setText("Abundances from EW")
@@ -1811,17 +1811,32 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
         self.update_fitting_options()
 
     def key_press_selectcheck(self, event):
-        if "'"+event.key+"'" == "' '":
+        if event.key is None:
+            return None
+
+        key = event.key.lower()
+        if key in ("a", "r", "u", "f") or event.key == " ":
             model, proxy_index, index = self._get_selected_model(True)
-            model.is_acceptable = np.logical_not(model.is_acceptable)
+            if model is None:
+                return None
+
+            if key == "a":
+                model.is_acceptable = True
+            elif key == "r":
+                model.is_acceptable = False
+            elif key == "u":
+                model.is_upper_limit = not model.is_upper_limit
+            elif key == "f":
+                model.user_flag = not model.user_flag
+            elif key == " ":
+                self.fit_one()
+                return None
+
             self.measurement_view.update_row(proxy_index.row())
+            self.update_fitting_options()
             self.update_spectrum_figure(redraw=True)
             return None
-        if event.key in ["f", "F"]:
-            model, proxy_index, index = self._get_selected_model(True)
-            model.user_flag = np.logical_not(model.user_flag)
-            self.measurement_view.update_row(proxy_index.row())
-            return None
+
         if event.key not in ["up","down","j", "J", "k", "K"]: return None
         try:
             proxy_index_row = self.measurement_view.selectionModel().selectedRows()[-1].row()

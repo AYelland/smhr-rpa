@@ -383,7 +383,7 @@ class StellarParametersTab(QtWidgets.QWidget):
         self.parent.session.optimize_stellar_parameters()
         ## refresh everything
         self.measure_abundances()
-        self.new_session_loaded()
+        # self.new_session_loaded()
 	
 	# E. Holmbeck added this function
     def solve_feh(self):
@@ -393,13 +393,16 @@ class StellarParametersTab(QtWidgets.QWidget):
         ## use current state as initial guess
         logger.info("Setting [alpha/Fe]=0.4 to solve")
         self.update_stellar_parameter_session()
-        self.parent.session.optimize_feh(self.params_to_optimize, use_FeII=self.toggle_feII.isChecked())
+        self.parent.session.optimize_feh(
+            self.params_to_optimize,
+            use_FeII=self.toggle_feII.isChecked()
+        )
         #self.parent.session.metadata["stellar_parameters"]
         ## refresh everything
         # E. Holmbeck added 'new_session' again; trying to fix update problem
-        self.new_session_loaded()
+        # self.new_session_loaded()
         self.measure_abundances()
-        self.new_session_loaded()
+        # self.new_session_loaded()
 
     def _add_error_labels(self, grid_layout, row, index):
         """Add read-only stat/sys/tot labels for one stellar parameter."""

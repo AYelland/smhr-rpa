@@ -507,7 +507,9 @@ class Spectrum1D(object):
         
         if not filename.endswith('fits'):
             a = np.array([self.dispersion, self.flux, self.ivar]).T
-            np.savetxt(filename, a, fmt="%.4f")
+            np.savetxt(
+                filename, a, fmt="%.4f",
+                header="wavelength flux ivar")
             return
         
         else:

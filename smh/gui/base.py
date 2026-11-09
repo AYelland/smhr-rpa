@@ -114,14 +114,16 @@ class SMHSpecDisplay(mpl.MPLWidget):
                  enable_zoom=True, enable_masks=False,
                  enable_model_modifications=False,
                  label_ymin=1.0, label_ymax=1.2,
-                 callbacks_after_fit=[],
+                 callbacks_after_fit=None,
                  comparison_spectrum=None,
                  **kwargs):
         super(SMHSpecDisplay, self).__init__(parent=parent, session=session, 
                                              **kwargs)
         self.parent = parent
         self.get_selected_model = get_selected_model
-        self.callbacks_after_fit = callbacks_after_fit
+        self.callbacks_after_fit = (
+            [] if callbacks_after_fit is None else list(callbacks_after_fit)
+        )
         self.session = session
         self.label_ymin = label_ymin
         self.label_ymax = label_ymax
@@ -633,13 +635,10 @@ class SMHSpecDisplay(mpl.MPLWidget):
         
     def _plot_model(self):
         if self.session is None: return False
-        # Hide previous model_errs
-        try:
-            # Note: leaks memory, but too hard to fix
-            self._lines["model_yerr"].set_visible(False)
-            del self._lines["model_yerr"]
-        except KeyError:
-            pass
+        # Remove the previous error band before creating a replacement.
+        model_yerr = self._lines.pop("model_yerr", None)
+        if model_yerr is not None:
+            model_yerr.remove()
         
         selected_model = self.selected_model
         try:
@@ -1257,11 +1256,14 @@ class MeasurementTableView(BaseTableView):
             
             set_fitting_window = menu.addAction("Set fitting window..")
             continuum_menu = menu.addMenu("Set continuum")
-            set_no_continuum = continuum_menu.addAction("No continuum",
-                checkable=True)
+            set_no_continuum = continuum_menu.addAction("No continuum")
+            set_no_continuum.setCheckable(True)
             continuum_menu.addSeparator()
-            set_continuum_order = [continuum_menu.addAction(
-                "Order {}".format(i), checkable=True) for i in range(0, 10)]
+            set_continuum_order = []
+            for i in range(0, 10):
+                action = continuum_menu.addAction("Order {}".format(i))
+                action.setCheckable(True)
+                set_continuum_order.append(action)
     
             menu.addSeparator()
     
@@ -1547,7 +1549,7 @@ def create_measurement_table_with_buttons(parent, filtermodel, session, **kwargs
     btn_filter.clicked.connect(show_or_hide_unacceptable)
     
     btn_refresh = QtWidgets.QPushButton(parent)
-    btn_refresh.setText("Refresh")
+    btn_refresh.setText("Reload Session") # previously the "Refresh" button
 
     hbox.addWidget(btn_filter)
     hbox.addWidget(btn_refresh)

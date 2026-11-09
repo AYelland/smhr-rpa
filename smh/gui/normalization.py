@@ -30,7 +30,7 @@ c = 299792458e-3 # km/s
 DOUBLE_CLICK_INTERVAL = 0.0 # MAGIC HACK
 
 # The pixel tolerance to select and remove an additional point.
-PIXEL_PICKER_TOLERANCE = 30 # MAGIC HACK
+PIXEL_PICKER_TOLERANCE = 45 # MAGIC HACK
 
 def dict_updated(default, new, exclude=None):
     updated = {}
@@ -285,18 +285,20 @@ class NormalizationTab(QtWidgets.QWidget):
         #grid_layout.addItem(spacer, 0, 0, 1, 2)
         grid_layout.addWidget(self.line, 0, 0, 1, 2, alignment=QtCore.Qt.AlignBottom)
         buttons = {
-                   "Ctrl+Drag": "Zoom",
-                   "Click+Drag": "Add mask",
+                   "RMB/Ctrl+Drag": "Zoom in",
+                   "2xRMB": "Zoom out",
+                   "LMB+Drag": "Add mask",
+                   "2xLMB": "Remove point or mask",
                    "Left/Right": "Change order",
                    "Up/Down": "Scale continuum by 1%",
                    "a": "Add an anchor point",
                    "x": "Remove nearest point",
-                   "u": "Undo last mask",
                    "w": "Remove nearest mask",
-                   "c": "Clear all masks and points",
-                   "r": "Reset zoom limits",
-                   "d": "Do not normalize this order",
+                   "u": "Undo last mask",
                    "f": "Refit",
+                   "r": "Reset zoom limits",
+                   "c": "Clear all masks and points",
+                   "d": "Don't normalize this order",
                    }
         for row, (button, description) in enumerate(buttons.items(),1):
             label = QtWidgets.QLabel(self)
@@ -672,68 +674,55 @@ class NormalizationTab(QtWidgets.QWidget):
             The matplotlib event signal.
         """
         
-        # Add/remove an additional point?
+        # Remove an additional point or mask?
         if event.dblclick:
 
-            logger.info("Removed double-click to add point. Use 'a' key instead")
-            if event.button == 1:
-                # Add a point.
-                # Removed adding points because APJ strongly recommends not using this
-                """
-                points = np.vstack([
-                    self.ax_order.collections[0].get_offsets(),
-                    [event.xdata, event.ydata]
-                ])
-                # TODO: set size by their weight?
-                self.ax_order.collections[0].set_offsets(points)
-                """
-                pass
-            
-            else:
-                # Are we within <tolerance of a point?
-                points = self.ax_order.collections[0].get_offsets()
+            if event.button != 1:
+                return None
 
-                # Need to scale x-distance to convert to pixels.
-                idx = self.current_order.dispersion.searchsorted(event.xdata)
-                xscale = np.nanmean(
-                    np.diff(self.current_order.dispersion[idx-5:idx+5]))
+            # Points take precedence so a point inside a mask can be removed.
+            removed = False
+            points = self.ax_order.collections[0].get_offsets()
 
-                """
-                bbox = self.ax_order.get_window_extent().transformed(
-                    self.norm_plot.dpi_scale_trans.inverted())
-                width =  bbox.width * self.norm_plot.dpi
-                height = bbox.height * self.norm_plot.dpi
-                print(width, height)
-                """
-                # TODO: Fix this distance thing.
+            if event.xdata is not None and event.ydata is not None and len(points) > 0:
+                # Compare positions in display coordinates so the tolerance
+                # remains a true pixel distance at every zoom level.
+                click_xy = np.array([event.x, event.y])
+                point_xy = self.ax_order.transData.transform(np.asarray(points))
+                distance = np.linalg.norm(point_xy - click_xy, axis=1)
+                index = np.argmin(distance)
 
-                distance = np.sqrt(
-                      ((points[:, 0] - event.xdata)/xscale)**2 \
-                    + (points[:, 1] - event.ydata)**2)
-                
-                if distance.size > 0:
+                if distance[index] < PIXEL_PICKER_TOLERANCE:
+                    # Keep the plotted points and cached fit inputs in sync.
+                    keep = np.ones(points.shape[0], dtype=bool)
+                    keep[index] = False
+                    self.ax_order.collections[0].set_offsets(points[keep])
 
-                    index = np.argmin(distance)
-                    if distance[index] < PIXEL_PICKER_TOLERANCE:
-                        # Remove that point.
-                        keep = np.ones(points.shape[0], dtype=bool)
-                        keep[index] = False
-                        self.ax_order.collections[0].set_offsets(points[keep])
+                    additional_points = self._cache["input"].get(
+                        "additional_points")
+                    if additional_points is not None \
+                    and index < len(additional_points):
+                        self._cache["input"]["additional_points"] \
+                            = np.delete(additional_points, index, axis=0)
+                    removed = True
 
-                    else:
-                        print("Closest point {} px away".format(distance[index]))
+            if not removed and event.xdata is not None:
+                # Masks span the plot vertically, so select one by wavelength.
+                exclude = np.asarray(
+                    self._cache["input"].get("exclude", np.array([])))
+                exclude = exclude.reshape(-1, 2)
+                matches = np.where(
+                    (exclude[:, 0] <= event.xdata)
+                    & (event.xdata <= exclude[:, 1]))[0]
+                if len(matches) > 0:
+                    self._cache["input"]["exclude"] \
+                        = np.delete(exclude, matches[0], axis=0)
+                    removed = True
 
-            # Update the cache.
-            """
-            # Removed here because don't want to add points this way
-            idx = self.current_order_index
-            N = points.shape[0]
-            # TODO: adhere to the knot weights
-            self._cache["input"]["additional_points"] \
-                = np.hstack((points, 100 * np.ones(N).reshape((N, 1))))
-            """
-            self.fit_continuum(clobber=True)
-            self.draw_continuum(refresh=True)
+            if removed:
+                self.fit_continuum(clobber=True)
+                self.draw_continuum(refresh=False)
+                self.update_continuum_mask(refresh=True)
 
             return None
         
@@ -914,7 +903,7 @@ class NormalizationTab(QtWidgets.QWidget):
 
         # Initialize the current order before selecting the mask. Setting the
         # mask index emits currentIndexChanged and refreshes the mask overlay.
-        self.update_order_index(0)
+        self.update_order_index(0, load_saved_settings=True)
         self.continuum_mask.setCurrentIndex(
             list(self._cache["masks"].keys()).index(
                 self._cache["default_mask"]))
@@ -1394,7 +1383,7 @@ class NormalizationTab(QtWidgets.QWidget):
         self.reset_input_style_defaults()
         return None
 
-    def update_order_index(self, index=None):
+    def update_order_index(self, index=None, load_saved_settings=False):
         """
         Update the currently selected order.
         """
@@ -1417,7 +1406,8 @@ class NormalizationTab(QtWidgets.QWidget):
 
         # Update the view if the input settings don't match the settings used
         # to normalize the current order.
-        self.check_for_different_input_settings()
+        self.check_for_different_input_settings(
+            load_saved_settings=load_saved_settings)
         
         return None
 
@@ -1442,12 +1432,16 @@ class NormalizationTab(QtWidgets.QWidget):
 
         return None 
 
-    def check_for_different_input_settings(self):
+    def check_for_different_input_settings(self, load_saved_settings=False):
         """
         Check whether the current input settings reflect the settings used to
         normalize the currently displayed order.
 
         2023-07-10 APJ made it so it just updates the display, instead of highlighting
+
+        The normalization controls are shared across orders.  They are only
+        loaded from saved per-order settings during initialization; changing
+        orders preserves the values currently shown in the controls.
         """
 
         session, index = self.parent.session, self.current_order_index
@@ -1468,10 +1462,11 @@ class NormalizationTab(QtWidgets.QWidget):
             elif key in self._cache["input"]:
                 del self._cache["input"][key]
 
-        if continuum is None:
+        if continuum is None or not load_saved_settings:
             # Holmbeck: a little hacky, but it works?
-            self.update_blue_trim()
-            self.update_red_trim()
+            if continuum is None:
+                self.update_blue_trim()
+                self.update_red_trim()
             return
 
         # If so, are the current normalization keywords different to the ones
