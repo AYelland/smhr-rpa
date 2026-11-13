@@ -688,7 +688,7 @@ class StellarParametersTab(QtWidgets.QWidget):
         line_above_kb = QtWidgets.QFrame()
         line_above_kb.setFrameShape(QtWidgets.QFrame.HLine)
         line_above_kb.setFrameShadow(QtWidgets.QFrame.Sunken)
-        grid_layout.addWidget(line_above_kb, 1, 0, 1, 5)
+        grid_layout.addWidget(line_above_kb, 1, 0, 1, 6)
 
         # Add vertical spacer
         spacer = QtWidgets.QSpacerItem(
@@ -696,7 +696,7 @@ class StellarParametersTab(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.Minimum
         )
-        grid_layout.addItem(spacer, 0, 0, 1, 5)
+        grid_layout.addItem(spacer, 0, 0, 1, 6)
 
         # List the keybindings for the measurement table
         create_label('<b>Keybindings: </b>', 2, 0, align=QtCore.Qt.AlignLeft)
@@ -704,6 +704,7 @@ class StellarParametersTab(QtWidgets.QWidget):
         create_label('[R]eject', 2, 2)
         create_label('[U]pper Limit', 2, 3)
         create_label('[F]lag', 2, 4)
+        create_label('2xLMB (Remove Mask)', 2, 5)
 
         # Add vertical spacer
         spacer = QtWidgets.QSpacerItem(
@@ -711,13 +712,13 @@ class StellarParametersTab(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.Minimum
         )
-        grid_layout.addItem(spacer, 3, 0, 1, 5)
+        grid_layout.addItem(spacer, 3, 0, 1, 6)
 
         # Add separating line
         line_below_kb = QtWidgets.QFrame()
         line_below_kb.setFrameShape(QtWidgets.QFrame.HLine)
         line_below_kb.setFrameShadow(QtWidgets.QFrame.Sunken)
-        grid_layout.addWidget(line_below_kb, 3, 0, 1, 5)
+        grid_layout.addWidget(line_below_kb, 3, 0, 1, 6)
         
         return grid_layout
 

@@ -11,6 +11,7 @@ __all__ = ["ChemicalAbundancesTab"]
 import logging
 import matplotlib.gridspec
 import numpy as np
+import os
 import sys
 from PySide6 import QtCore, QtGui, QtWidgets
 import time
@@ -24,6 +25,7 @@ from smh import utils
 import mpl, style_utils
 from matplotlib.ticker import MaxNLocator
 from smh.photospheres.abundances import asplund_2009 as solar_composition
+from smh.specutils import Spectrum1D
 from smh.spectral_models import (ProfileFittingModel, SpectralSynthesisModel)
 
 from spectral_models_table import SpectralModelsTableViewBase, SpectralModelsFilterProxyModel, SpectralModelsTableModelBase
@@ -99,8 +101,8 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
         self.figure.mpl_connect("key_press_event", self.key_press_selectcheck)
         self.figure.mpl_connect("key_press_event", self.key_press_automask_sigma)
         ## Stuff for extra synthesis
-        self.extra_spec_1 = self.ax_spectrum.plot([np.nan],[np.nan], ls='-', color='#ff531a', lw=1.5, zorder=9998)[0]
-        self.extra_spec_2 = self.ax_spectrum.plot([np.nan],[np.nan], ls='-', color='#ffc34b', lw=1.5, zorder=9998)[0]
+        self.extra_spec_1 = self.ax_spectrum.plot([np.nan],[np.nan], ls='-', color="#ffbc37", lw=1.5, zorder=9998)[0]
+        self.extra_spec_2 = self.ax_spectrum.plot([np.nan],[np.nan], ls='-', color="#bb22e5", lw=1.5, zorder=9998)[0]
         #self.extra_spec_none = self.ax_spectrum.plot([np.nan],[np.nan], ls='-', color='teal', lw=1.2, zorder=9999)[0]
         
         ################
@@ -124,9 +126,10 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
         # Connect filter combo box
         self.filter_combo_box.currentIndexChanged.connect(self.filter_combo_box_changed)
         
-        # Connect selection model
+        # Update selected-line markers without re-synthesizing delta spectra.
         _ = self.synth_abund_table.selectionModel()
-        _.selectionChanged.connect(self.update_spectrum_figure)
+        _.selectionChanged.connect(
+            lambda *_: self.update_spectrum_figure(clear_extra=False))
 
         # Connect buttons
         self.btn_fit_all.clicked.connect(self.fit_all_profiles)
@@ -1095,10 +1098,12 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
                 for elem, abunddiff in extra_abundances[1].items():
                     abundances2[elem] += abunddiff
                     self.synth_abund_table_model.extra_abundances[elem][1] = abunddiff
-                x, y = spectral_model.get_synth(abundances1)
-                self.extra_spec_1.set_data([x,y])
-                x, y = spectral_model.get_synth(abundances2)
-                self.extra_spec_2.set_data([x,y])
+                if extra_abundances[0]:
+                    x, y = spectral_model.get_synth(abundances1)
+                    self.extra_spec_1.set_data([x,y])
+                if extra_abundances[1]:
+                    x, y = spectral_model.get_synth(abundances2)
+                    self.extra_spec_2.set_data([x,y])
             # E. Holmbeck added a "none" line
             self.fit_none(spectral_model)
             self.figure.draw()
@@ -1146,10 +1151,12 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
         self.update_spectrum_figure(True, **kwargs)
         return None
 
-    def update_spectrum_figure(self, redraw=False, reset_limits=True, row=None, selected_model=None):
+    def update_spectrum_figure(self, redraw=False, reset_limits=True, row=None,
+                               selected_model=None, clear_extra=True):
         ## If synthesis, label selected lines
-        self.extra_spec_1.set_data([[np.nan], [np.nan]])
-        self.extra_spec_2.set_data([[np.nan], [np.nan]])
+        if clear_extra:
+            self.extra_spec_1.set_data([[np.nan], [np.nan]])
+            self.extra_spec_2.set_data([[np.nan], [np.nan]])
         #self.extra_spec_none.set_data([[np.nan], [np.nan]])
         
         if selected_model is None:
@@ -1679,34 +1686,112 @@ class ChemicalAbundancesTab(QtWidgets.QWidget):
         if not isinstance(spectral_model, SpectralSynthesisModel): 
             logger.info("Must select a synthesis spectral model to export")
             return
-        ## ask for synthesis output filename
-        synth_path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
-                caption="Enter synthesis output filename",
-                dir=self.parent._default_filename("synthesis.fits"),
-                filter="FITS spectrum (*.fits);;All files (*)")
-        if not synth_path: return
-        ## Ask for data output filename
-        data_path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
-                caption="Enter data output filename",
-                dir=self.parent._default_filename("synthesis_data.txt"),
-                filter="Text data (*.txt);;All files (*)")
-        if not data_path: return
-        ## Ask for parameter output filename
-        param_path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
-                caption="Enter parameter output filename",
-                dir=self.parent._default_filename("synthesis_parameters.txt"),
-                filter="Text data (*.txt);;All files (*)")
-        if not param_path: return
-        ## Ask for linelist output filename
-        linelist_path, _ = QtWidgets.QFileDialog.getSaveFileName(self,
-                caption="Enter linelist output filename",
-                dir=self.parent._default_filename("synthesis_linelist.txt"),
-                filter="Text line list (*.txt);;All files (*)")
-        if not linelist_path: return
+        extra_abundances = self.synth_abund_table_model.get_extra_abundances()
+        export_names = [
+            ("Synthesis", self.parent._default_filename("synthesis.txt")),
+            ("Data", self.parent._default_filename("synthesis_data.txt")),
+            ("Parameters", self.parent._default_filename("synthesis_parameters.txt")),
+            ("Line list", self.parent._default_filename("synthesis_linelist.txt")),
+        ]
+        if extra_abundances is not None:
+            export_names.extend(
+                (
+                    "Delta synthesis {}".format(i),
+                    self.parent._default_filename("synthesis{}.txt".format(i))
+                )
+                for i, abundances in enumerate(extra_abundances, 1)
+                if abundances
+            )
+
+        default_directory = os.path.dirname(
+            self.parent._default_filename("synthesis.txt")
+        ) or "."
+        directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Select synthesis export directory", default_directory
+        )
+        if not directory:
+            return
+
+        default_paths = [
+            (label, os.path.join(directory, filename))
+            for label, filename in export_names
+        ]
+        file_list = "\n".join(
+            "  {}: {}".format(label, os.path.basename(path))
+            for label, path in default_paths
+        )
+        message = QtWidgets.QMessageBox(self)
+        message.setWindowTitle("Export synthesis files")
+        message.setText("Use these filenames in the selected directory?")
+        message.setInformativeText(file_list)
+        use_defaults = message.addButton(
+            "Use Default Names", QtWidgets.QMessageBox.AcceptRole
+        )
+        choose_individually = message.addButton(
+            "Choose Individually", QtWidgets.QMessageBox.DestructiveRole
+        )
+        message.addButton(QtWidgets.QMessageBox.Cancel)
+        message.exec()
+
+        if message.clickedButton() is use_defaults:
+            paths = [path for _, path in default_paths]
+        elif message.clickedButton() is choose_individually:
+            paths = []
+            filters = (
+                "Text file (*.txt);;All files (*)",
+                "Text data (*.txt);;All files (*)",
+                "Text data (*.txt);;All files (*)",
+                "Text line list (*.txt);;All files (*)",
+            )
+            for (label, default_path), file_filter in zip(
+                default_paths[:4], filters
+            ):
+                path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    self, "Enter {} output filename".format(label.lower()),
+                    default_path, file_filter
+                )
+                if not path:
+                    return
+                paths.append(path)
+            for label, default_path in default_paths[4:]:
+                path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    self, "Enter {} output filename".format(label.lower()),
+                    default_path, "Text file (*.txt);;All files (*)"
+                )
+                if not path:
+                    return
+                paths.append(path)
+        else:
+            return
+
+        synth_path, data_path, param_path, linelist_path = paths[:4]
+        delta_paths = []
+        for (i, abundances), delta_path in zip(
+            enumerate(extra_abundances or (), 1), paths[4:]
+        ):
+            if abundances:
+                delta_paths.append((i, delta_path, abundances))
+
         ## Export
         spectral_model.export_fit(synth_path, data_path, param_path)
         spectral_model.export_line_list(linelist_path)
-        logger.info("Exported to {}, {}, {}, {}".format(synth_path, data_path, param_path, linelist_path))
+        try:
+            fitted_result = spectral_model.metadata["fitted_result"]
+        except KeyError:
+            logger.info("Please run a fit before exporting delta syntheses")
+        else:
+            base_abundances = deepcopy(spectral_model.metadata["rt_abundances"])
+            for elem, abundance in zip(spectral_model.elements, fitted_result[-1]["abundances"]):
+                base_abundances[elem] = abundance
+            for i, delta_path, abundances in delta_paths:
+                delta_abundances = deepcopy(base_abundances)
+                for elem, abunddiff in abundances.items():
+                    delta_abundances[elem] += abunddiff
+                x, y = spectral_model.get_synth(delta_abundances)
+                Spectrum1D(x, y, np.ones(len(x))).write(delta_path)
+        exported_paths = [synth_path, data_path, param_path, linelist_path]
+        exported_paths.extend(path for _, path, _ in delta_paths)
+        logger.info("Exported to {}".format(", ".join(exported_paths)))
         return
     
     # E. Holmbeck added
@@ -1968,8 +2053,8 @@ class SynthesisAbundanceTableModel(QtCore.QAbstractTableModel):
             if col==0: return "El."
             if col==1: return "A(X)"
             if col==2: return "[X/Fe]"
-            if col==3: return "\u03B4A(X)_1"
-            if col==4: return "\u03B4A(X)_2"
+            if col==3: return "\u03B4A(X)1"
+            if col==4: return "\u03B4A(X)2"
         if role==QtCore.Qt.FontRole:
             return _QFONT
         return None
@@ -1985,6 +2070,7 @@ class SynthesisAbundanceTableModel(QtCore.QAbstractTableModel):
                 self.extra_abundances[elem] = [None, None]
             if value == "":
                 self.extra_abundances[elem][index.column()-3] = None
+                self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole])
                 return True
             try:
                 value = float(value)
@@ -1992,6 +2078,7 @@ class SynthesisAbundanceTableModel(QtCore.QAbstractTableModel):
                 return False
             else:
                 self.extra_abundances[elem][index.column()-3] = value
+                self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole])
                 return True
         if elem in self.spectral_model.metadata["rt_abundances"]:
             try:

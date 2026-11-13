@@ -129,7 +129,7 @@ class SMHSpecDisplay(mpl.MPLWidget):
         self.label_ymax = label_ymax
         # E. Holmbeck changed colors:
         self.acceptable_color = "#d92653"
-        self.unacceptable_color = "#37ae91"
+        self.unacceptable_color = "#38d3ac"
 
         
         self.comparison_spectrum = comparison_spectrum
@@ -400,7 +400,9 @@ class SMHSpecDisplay(mpl.MPLWidget):
         ## Doubleclick: remove mask, and if so refit/redraw
         if event.dblclick:
             mask_removed = self._remove_mask(selected_model, event)
-            if mask_removed and isinstance(selected_model, ProfileFittingModel):
+            if mask_removed and isinstance(
+                selected_model, (ProfileFittingModel, SpectralSynthesisModel)
+            ):
                 selected_model.fit()
                 self.update_spectrum_figure(True,False)
                 for callback in self.callbacks_after_fit:

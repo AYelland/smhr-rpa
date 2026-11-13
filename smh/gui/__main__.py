@@ -104,9 +104,10 @@ if __name__ == '__main__':
     app.window.raise_()
 
     # DEBUG
+    testpath = '/Users/ayelland/Research/metal-poor-stars/project/yelland2026b/data/coadded_data/CD-38_245/CD-38_245.smh'
     # testpath = os.path.join(os.path.expanduser("~"), "Downloads", "testing.smh")
-    # logger.debug("Loading {}".format(testpath))
-    # app.window.open_session(path=testpath)
+    logger.debug("Loading {}".format(testpath))
+    app.window.open_session(path=testpath)
     
     # DEBUG
     #testpath = os.path.dirname(os.path.abspath(__file__))+"/../tests/test_data/spectra/hd122563.fits"
